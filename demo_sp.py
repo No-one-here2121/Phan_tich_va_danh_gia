@@ -5,14 +5,25 @@ import numpy as np
 import warnings
 from datetime import datetime, timedelta
 from vnstock import Finance, Company, Quote, Vnstock
-from IPython.display import display, HTML
 
+# Nếu chạy trên .py thì display không tồn tại, ta định nghĩa hàm dummy hoặc dùng print
+try:
+    from IPython.display import display, HTML
+    # Kiểm tra xem có đang thực sự chạy trong môi trường có IPython không
+    get_ipython()
+except (ImportError, NameError):
+    # Nếu lỗi (tức là đang chạy file .py thường), định nghĩa display là print
+    def display(obj): print(obj)
+    def HTML(obj): return obj
+
+# Tắt cảnh báo
 warnings.filterwarnings("ignore")
 
+# Cấu hình hiển thị pandas trong console
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', 100)
+pd.set_option('display.width', 1000) # Mở rộng chiều ngang console
 pd.options.display.float_format = '{:,.2f}'.format
-pd.set_option('display.max_colwidth', None)
 
 class BusinessAnalyzer:
     def __init__(self, symbol):
@@ -29,6 +40,7 @@ class BusinessAnalyzer:
             'news': [], 'events': []
         } 
 
+    # --- 1. LẤY DỮ LIỆU (GIỮ NGUYÊN) ---
     def get_company_info(self):
         print(f"--- Đang tải thông tin {self.symbol} (Nguồn: VCI) ---")
         try:
@@ -127,6 +139,7 @@ class BusinessAnalyzer:
             return series
         return pd.Series(0.0, index=self.raw_reports.index)
 
+    # --- 2. TÍNH TOÁN (GIỮ NGUYÊN) ---
     def calculate_metrics(self):
         if self.raw_reports.empty: return
         industry = self.profile_info.get('industry', '').lower()
@@ -166,6 +179,7 @@ class BusinessAnalyzer:
         self.final_metrics = metrics.round(2).sort_index(ascending=True)
         return self.final_metrics
 
+    # --- 3. TRỰC QUAN HÓA ---
     def visualize_stock_price(self):
         if self.price_history.empty: return
         df = self.price_history.sort_index()
@@ -189,31 +203,30 @@ class BusinessAnalyzer:
         plt.ylabel('Giá cổ phiếu (VND)')
         plt.legend(loc='lower left', title='CHÚ GIẢI:')
         plt.grid(True, linestyle='--', alpha=0.5)
-        plt.tight_layout(); plt.show()
+        plt.tight_layout()
+        plt.show() # QUAN TRỌNG: Trên .py phải có lệnh này mới hiện ảnh
 
     def visualize_financials(self, df):
         try:
             plot_data = df.tail(8)
             
-            print(f"\n>>> BẢNG CHI TIẾT CÁC CHỈ SỐ (Đơn vị: Tỷ VNĐ / % / Lần):")
-            
-            # Reset Index để biến 'Tên hàng' (Index) thành một cột bình thường
+            # --- 1. HIỂN THỊ BẢNG SỐ LIỆU (TEXT) ---
+            # Sửa lỗi: Dùng print thay vì display(HTML)
             df_display = plot_data.T.reset_index()
-            # Đổi tên cột đó thành "CHỈ TIÊU"
             df_display.rename(columns={'index': 'CHỈ TIÊU'}, inplace=True)
             
-            # Hiển thị bảng
-            display(df_display.viz.table(
-                title=f'Dữ liệu Tài chính {self.symbol} (8 Quý gần nhất)', 
-                header=True, 
-                figsize=(14, 8)
-            ))
+            print(f"\n>>> BẢNG CHI TIẾT CÁC CHỈ SỐ (8 Quý gần nhất):")
+            # In bảng ra console dùng to_string để không bị cắt dòng
+            print("-" * 100)
+            print(df_display.to_string(index=False)) 
+            print("-" * 100)
             
-            # --- TẠO BIỂU ĐỒ VỚI CHÚ THÍCH RÕ RÀNG (GIỮ NGUYÊN) ---
+            # --- TẠO BIỂU ĐỒ ---
             cols_growth = ['Tăng trưởng DT (YoY %)', 'Tăng trưởng LN (YoY %)']
             if all(c in plot_data.columns for c in cols_growth):
                 fig, ax = plt.subplots(figsize=(12, 6))
                 plot_data[cols_growth].plot(kind='bar', ax=ax, width=0.7)
+                
                 ax.set_title(f'{self.symbol} - TỐC ĐỘ TĂNG TRƯỞNG (YOY)', fontsize=14, fontweight='bold')
                 ax.set_ylabel('Phần trăm (%)')
                 ax.set_xlabel('Quý báo cáo')
@@ -221,10 +234,13 @@ class BusinessAnalyzer:
                 ax.axhline(0, color='black', linewidth=0.8)
                 ax.legend(['Cột xanh: Tăng trưởng Doanh thu', 'Cột cam: Tăng trưởng Lợi nhuận'], 
                           title='CHÚ GIẢI:', loc='best')
-                plt.xticks(rotation=0); plt.tight_layout(); plt.show()
+                plt.xticks(rotation=0)
+                plt.tight_layout()
+                plt.show() # Hiển thị biểu đồ
 
             cols_margin = ['Biên LN Gộp (%)', 'Biên LN Ròng (%)', 'ROE (Quý) (%)']
             valid_cols = [c for c in cols_margin if c in plot_data.columns]
+            
             if valid_cols:
                 fig, ax = plt.subplots(figsize=(12, 6))
                 plot_data[valid_cols].plot(kind='line', marker='o', linewidth=2, ax=ax)
@@ -233,12 +249,13 @@ class BusinessAnalyzer:
                 ax.set_xlabel('Quý báo cáo')
                 ax.grid(True, linestyle='--', alpha=0.5)
                 ax.legend(valid_cols, title='CHÚ GIẢI:', loc='best')
-                plt.tight_layout(); plt.show()
+                plt.tight_layout()
+                plt.show() # Hiển thị biểu đồ
 
         except Exception as e:
             print(f"Lỗi hiển thị biểu đồ: {e}")
 
-    # --- HÀM HỖ TRỢ ---
+    # --- HÀM HỖ TRỢ HIỂN THỊ TEXT CHO .PY ---
     def visualize_ownership(self):
         df_sh = self.profile_info.get('shareholders')
         if df_sh is None or df_sh.empty: return
@@ -261,39 +278,35 @@ class BusinessAnalyzer:
             ax.legend(wedges, labels, title="Danh sách Cổ đông", loc="center left", bbox_to_anchor=(1, 0, 0.5, 1))
             fig.gca().add_artist(plt.Circle((0,0),0.70,fc='white'))
             plt.title(f'CƠ CẤU SỞ HỮU - {self.symbol}', fontweight='bold')
-            plt.tight_layout(); plt.show()
+            plt.tight_layout()
+            plt.show()
         except: pass
 
-    def make_title_link(self, title, link):
-        if link and isinstance(link, str) and link.startswith('http'):
-            return f'<a href="{link}" target="_blank" style="text-decoration:none; color:#007bff; font-weight:500;">{title}</a>'
-        return title
-
-    def display_clickable_table(self, data, date_col, title_col, link_col, table_title):
+    def display_text_table(self, data, date_col, title_col, link_col, table_title):
+        """Hàm in bảng Text cho file .py (thay vì HTML)"""
         if not data: return
-        df = pd.DataFrame(data)
-        if date_col not in df.columns or title_col not in df.columns: return
-        display_data = []
-        for _, row in df.iterrows():
-            clickable_title = self.make_title_link(row.get(title_col, ''), row.get(link_col, ''))
-            display_data.append({'Ngày': row.get(date_col, ''), 'Nội dung (Nhấp để xem)': clickable_title})
-        df_show = pd.DataFrame(display_data)
         print(f"\n>>> {table_title}:")
-        html = df_show.to_html(escape=False, index=False, classes='table table-hover')
-        styled_html = f"""<style>.table {{ width: 100%; border-collapse: collapse; font-family: sans-serif; }} .table th {{ background-color: #f2f2f2; padding: 10px; text-align: left; }} .table td {{ padding: 8px; border-bottom: 1px solid #ddd; }}</style>{html}"""
-        display(HTML(styled_html))
+        print("-" * 80)
+        for row in data:
+            date = row.get(date_col, 'N/A')
+            title = row.get(title_col, 'N/A')
+            link = row.get(link_col, '')
+            print(f"[{date}] {title}")
+            if link:
+                print(f"   Link: {link}")
+        print("-" * 80)
 
     def display_glossary(self):
         print("\n" + "="*50)
         print("📖 BẢNG GIẢI THÍCH THUẬT NGỮ (GLOSSARY)")
         print("="*50)
         glossary = [
-            ["Doanh thu", "Tổng tiền bán hàng/dịch vụ (Chưa trừ chi phí)."],
-            ["Lợi nhuận gộp", "Tiền lãi sau khi trừ giá vốn hàng bán."],
-            ["Lợi nhuận ròng", "Tiền lãi cuối cùng bỏ túi (Đã trừ thuế, phí)."],
-            ["YoY (Year over Year)", "Tăng/Giảm so với cùng quý năm ngoái."],
-            ["ROE", "Hiệu quả sử dụng vốn của cổ đông (Càng cao càng tốt)."],
-            ["D/E", "Tỷ lệ Nợ trên Vốn. Cao quá (>2) thường rủi ro."],
+            ["Doanh thu", "Tổng tiền bán hàng/dịch vụ."],
+            ["Lợi nhuận gộp", "Tiền lãi sau khi trừ giá vốn."],
+            ["Lợi nhuận ròng", "Tiền lãi cuối cùng (đã trừ thuế/phí)."],
+            ["YoY (%)", "Tăng/Giảm so với cùng kỳ năm trước."],
+            ["ROE", "Hiệu quả vốn chủ sở hữu."],
+            ["D/E", "Tỷ lệ Nợ/Vốn chủ."],
         ]
         for term, desc in glossary:
             print(f"• {term:<25} : {desc}")
@@ -309,8 +322,9 @@ class BusinessAnalyzer:
             print(f"\nBAN LÃNH ĐẠO (Top 5):")
             for p in info['officers'][:5]: print(f" - {p.get('officer_name')} ({p.get('officer_position')})")
         
-        self.display_clickable_table(info['news'], 'date_str', 'news_title', 'news_source_link', f"TIN TỨC MỚI NHẤT")
-        self.display_clickable_table(info['events'], 'date_str', 'display_name', 'event_link', f"SỰ KIỆN DOANH NGHIỆP")
+        # Sửa lại: Dùng display_text_table cho console
+        self.display_text_table(info['news'], 'date_str', 'news_title', 'news_source_link', f"TIN TỨC MỚI NHẤT")
+        self.display_text_table(info['events'], 'date_str', 'display_name', 'event_link', f"SỰ KIỆN DOANH NGHIỆP")
 
         print("\n" + "="*80)
         print("\n>>> XU HƯỚNG GIÁ & KỸ THUẬT:")
@@ -325,11 +339,17 @@ class BusinessAnalyzer:
         
         self.display_glossary()
 
+# --- CHẠY CHƯƠNG TRÌNH ---
 if __name__ == "__main__":
-    symbol = input("Nhập mã cổ phiếu (VD: ACB, HPG): ")
-    app = BusinessAnalyzer(symbol)
-    app.get_company_info()
-    app.get_historical_price()
-    if app.get_financial_data():
-        app.calculate_metrics()
-        app.display_report()
+    try:
+        symbol = input("Nhập mã cổ phiếu (VD: ACB, HPG): ")
+        app = BusinessAnalyzer(symbol)
+        app.get_company_info()
+        app.get_historical_price()
+        if app.get_financial_data():
+            app.calculate_metrics()
+            app.display_report()
+    except KeyboardInterrupt:
+        print("\nĐã dừng chương trình.")
+    except Exception as e:
+        print(f"Đã xảy ra lỗi: {e}")
