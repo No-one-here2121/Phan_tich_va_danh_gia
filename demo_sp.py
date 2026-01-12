@@ -6,23 +6,13 @@ import warnings
 from datetime import datetime, timedelta
 from vnstock import Finance, Company, Quote, Vnstock
 
-# Nếu chạy trên .py thì display không tồn tại, ta định nghĩa hàm dummy hoặc dùng print
-try:
-    from IPython.display import display, HTML
-    # Kiểm tra xem có đang thực sự chạy trong môi trường có IPython không
-    get_ipython()
-except (ImportError, NameError):
-    # Nếu lỗi (tức là đang chạy file .py thường), định nghĩa display là print
-    def display(obj): print(obj)
-    def HTML(obj): return obj
-
 # Tắt cảnh báo
 warnings.filterwarnings("ignore")
 
 # Cấu hình hiển thị pandas trong console
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', 100)
-pd.set_option('display.width', 1000) # Mở rộng chiều ngang console
+pd.set_option('display.width', 1000) 
 pd.options.display.float_format = '{:,.2f}'.format
 
 class BusinessAnalyzer:
@@ -35,12 +25,12 @@ class BusinessAnalyzer:
         self.raw_reports = pd.DataFrame() 
         self.final_metrics = None
         self.price_history = pd.DataFrame()
+        self.ratio_df = pd.DataFrame()
         self.profile_info = {
             'officers': [], 'subsidiaries': [], 'shareholders': pd.DataFrame(),
             'news': [], 'events': []
         } 
 
-    # --- 1. LẤY DỮ LIỆU (GIỮ NGUYÊN) ---
     def get_company_info(self):
         print(f"--- Đang tải thông tin {self.symbol} (Nguồn: VCI) ---")
         try:
@@ -120,9 +110,20 @@ class BusinessAnalyzer:
                         df.set_index('Period', inplace=True)
                     dfs.append(df)
                 except: dfs.append(pd.DataFrame())
-            
             self.raw_reports = pd.concat(dfs, axis=1)
             self.raw_reports = self.raw_reports.loc[:, ~self.raw_reports.columns.duplicated()]
+
+            try:
+                ratio = self.finance.ratio(period='quarter', lang='vi')
+                if not ratio.empty:
+                   year = ratio[('Meta', 'Năm')]
+                   quarter = ratio[('Meta', 'Kỳ')]
+                   ratio['Period'] = year.astype(str) + "-Q" + quarter.astype(str)
+                   ratio.set_index('Period', inplace=True)
+                   self.ratio_df = ratio
+            except Exception as e:
+                print(f"Không tải được chỉ số ratio: {e}")
+
             return not self.raw_reports.empty
         except: return False
 
@@ -139,11 +140,9 @@ class BusinessAnalyzer:
             return series
         return pd.Series(0.0, index=self.raw_reports.index)
 
-    # --- 2. TÍNH TOÁN (GIỮ NGUYÊN) ---
     def calculate_metrics(self):
         if self.raw_reports.empty: return
         industry = self.profile_info.get('industry', '').lower()
-        is_bank = 'ngân hàng' in industry or 'bank' in industry
 
         revenue = self._get_val(['Doanh thu thuần', 'Tổng thu nhập hoạt động'])
         net_income = self._get_val(['Lợi nhuận sau thuế của Cổ đông công ty mẹ', 'Cổ đông của Công ty mẹ'])
@@ -156,12 +155,34 @@ class BusinessAnalyzer:
         inventory = self._get_val(['Hàng tồn kho'])
         ocf = self._get_val(['Lưu chuyển tiền thuần từ HĐKD'])
         capex = self._get_val(['Tiền chi mua sắm', 'Mua sắm TSCĐ'])
+        cost_to_operate = (self._get_val(['Chi phí quản lý DN'])).abs()
+        total_venue_activity = self._get_val(['Tổng thu nhập hoạt động'])
+
+        #Cho ngan hang
+        customer_loan_money = self._get_val(['Cho vay khách hàng'])
+        customer_money = self._get_val(['Tiền gửi của khách hàng'])
+        value_paper = self._get_val(['Phát hành giấy tờ có giá'])
+        money_in_VN_bank = self._get_val(['Tiền gửi tại ngân hàng nhà nước Việt Nam'])
+        money_in_other_bank = self._get_val(['Tiền gửi và cho vay các TCTD'])
+        money_from_business = (
+            self._get_val(['Chứng khoán kinh doanh']) + 
+            self._get_val(['Chứng khoán đầu tư sẵn sàng để bán']) + 
+            self._get_val(['Chứng khoán đầu tư giữ đến ngày đáo hạn'])
+        )
 
         metrics = pd.DataFrame()
         def safe_div(a, b): return a / b.replace(0, float('nan'))
         
         revenue = revenue.sort_index()
         net_income = net_income.sort_index()
+
+        if not self.ratio_df.empty:
+            try:
+                metrics['EPS (VND)'] = self.ratio_df[('Chỉ tiêu định giá', 'EPS (VND)')]
+                metrics['P/E (Lần)'] = self.ratio_df[('Chỉ tiêu định giá', 'P/E')]
+                metrics['P/B (Lần)'] = self.ratio_df[('Chỉ tiêu định giá', 'P/B')]
+            except KeyError:
+                pass
         
         metrics['Doanh thu (Tỷ)'] = revenue
         metrics['Lợi nhuận (Tỷ)'] = net_income
@@ -170,11 +191,25 @@ class BusinessAnalyzer:
         metrics['Biên LN Gộp (%)'] = safe_div(gross_profit, revenue) * 100
         metrics['Biên LN Ròng (%)'] = safe_div(net_income, revenue) * 100
         metrics['ROE (Quý) (%)'] = safe_div(net_income, equity) * 100 
-        metrics['Thanh toán hiện hành (Lần)'] = safe_div(cur_asset, cur_liab)
         metrics['Nợ/Vốn chủ (Lần)'] = safe_div(liabilities, equity)
+        metrics['CIR (Lần)'] = safe_div(cost_to_operate,total_venue_activity)
         
-        if is_bank: metrics['Vòng quay kho'] = 0; metrics['FCF (Tỷ)'] = 0
-        else: metrics['Vòng quay kho'] = safe_div(cogs, inventory); metrics['FCF (Tỷ)'] = ocf + capex
+        if 'ngân hàng' in industry or 'bank' in industry:
+            metrics['LDR (%)'] = safe_div(customer_loan_money, (customer_money + value_paper)) * 100
+            metrics['Vòng quay kho'] = 0
+            metrics['FCF (Tỷ)'] = 0
+            metrics['Thanh toán hiện hành (Lần)'] = 0
+            total_earning_assets = customer_loan_money + money_in_VN_bank + money_in_other_bank + money_from_business
+            tai_san_sinh_loi_bq = total_earning_assets.rolling(window=2).mean()
+            metrics['NIM (%)'] = safe_div(gross_profit*4,tai_san_sinh_loi_bq)*100
+            metrics['Biên LN Gộp (%)'] = 0
+        else: 
+            metrics['Biên LN Gộp (%)'] = safe_div(gross_profit, revenue) * 100
+            metrics['LDR (%)'] = 0
+            metrics['Vòng quay kho'] = safe_div(cogs, inventory)
+            metrics['FCF (Tỷ)'] = ocf + capex
+            metrics['Thanh toán hiện hành (Lần)'] = safe_div(cur_asset, cur_liab)
+            metrics['NIM (%)'] = 0
 
         self.final_metrics = metrics.round(2).sort_index(ascending=True)
         return self.final_metrics
@@ -204,24 +239,20 @@ class BusinessAnalyzer:
         plt.legend(loc='lower left', title='CHÚ GIẢI:')
         plt.grid(True, linestyle='--', alpha=0.5)
         plt.tight_layout()
-        plt.show() # QUAN TRỌNG: Trên .py phải có lệnh này mới hiện ảnh
+        plt.show()
 
     def visualize_financials(self, df):
         try:
             plot_data = df.tail(8)
             
-            # --- 1. HIỂN THỊ BẢNG SỐ LIỆU (TEXT) ---
-            # Sửa lỗi: Dùng print thay vì display(HTML)
             df_display = plot_data.T.reset_index()
             df_display.rename(columns={'index': 'CHỈ TIÊU'}, inplace=True)
             
             print(f"\n>>> BẢNG CHI TIẾT CÁC CHỈ SỐ (8 Quý gần nhất):")
-            # In bảng ra console dùng to_string để không bị cắt dòng
             print("-" * 100)
             print(df_display.to_string(index=False)) 
             print("-" * 100)
             
-            # --- TẠO BIỂU ĐỒ ---
             cols_growth = ['Tăng trưởng DT (YoY %)', 'Tăng trưởng LN (YoY %)']
             if all(c in plot_data.columns for c in cols_growth):
                 fig, ax = plt.subplots(figsize=(12, 6))
@@ -236,7 +267,17 @@ class BusinessAnalyzer:
                           title='CHÚ GIẢI:', loc='best')
                 plt.xticks(rotation=0)
                 plt.tight_layout()
-                plt.show() # Hiển thị biểu đồ
+                plt.show()
+
+            cols_val = ['P/E (Lần)', 'P/B (Lần)']
+            valid_val = [c for c in cols_val if c in plot_data.columns]
+            if valid_val:
+                fig, ax = plt.subplots(figsize=(12, 6))
+                plot_data[valid_val].plot(kind='line', marker='o', linewidth=2, ax=ax)
+                ax.set_title(f'{self.symbol} - ĐỊNH GIÁ (P/E & P/B)', fontsize=14, fontweight='bold')
+                ax.set_ylabel('Lần'); ax.grid(True, linestyle='--', alpha=0.5)
+                ax.legend(valid_val, loc='best')
+                plt.tight_layout(); plt.show()
 
             cols_margin = ['Biên LN Gộp (%)', 'Biên LN Ròng (%)', 'ROE (Quý) (%)']
             valid_cols = [c for c in cols_margin if c in plot_data.columns]
@@ -250,12 +291,11 @@ class BusinessAnalyzer:
                 ax.grid(True, linestyle='--', alpha=0.5)
                 ax.legend(valid_cols, title='CHÚ GIẢI:', loc='best')
                 plt.tight_layout()
-                plt.show() # Hiển thị biểu đồ
+                plt.show()
 
         except Exception as e:
             print(f"Lỗi hiển thị biểu đồ: {e}")
 
-    # --- HÀM HỖ TRỢ HIỂN THỊ TEXT CHO .PY ---
     def visualize_ownership(self):
         df_sh = self.profile_info.get('shareholders')
         if df_sh is None or df_sh.empty: return
@@ -301,12 +341,22 @@ class BusinessAnalyzer:
         print("📖 BẢNG GIẢI THÍCH THUẬT NGỮ (GLOSSARY)")
         print("="*50)
         glossary = [
-            ["Doanh thu", "Tổng tiền bán hàng/dịch vụ."],
-            ["Lợi nhuận gộp", "Tiền lãi sau khi trừ giá vốn."],
-            ["Lợi nhuận ròng", "Tiền lãi cuối cùng (đã trừ thuế/phí)."],
-            ["YoY (%)", "Tăng/Giảm so với cùng kỳ năm trước."],
-            ["ROE", "Hiệu quả vốn chủ sở hữu."],
-            ["D/E", "Tỷ lệ Nợ/Vốn chủ."],
+            # --- NHÓM 1: CƠ BẢN (GENERAL) ---
+            ["Doanh thu (TOI)", "Tổng thu nhập hoạt động (Lãi thuần + Dịch vụ + Khác)."],
+            ["Lợi nhuận ròng", "Lãi sau thuế dành cho cổ đông công ty mẹ."],
+            ["YoY (%)", "Tốc độ tăng trưởng so với cùng kỳ năm trước."],
+            ["ROE (%)", "Hiệu quả sinh lời trên vốn chủ sở hữu (Nhà đầu tư bỏ 100đ lãi được bao nhiêu?)."],
+            ["D/E (Lần)", "Đòn bẩy tài chính: Tỷ lệ Nợ vay / Vốn chủ sở hữu."],
+
+            # --- NHÓM 2: CHỈ SỐ SỐNG CÒN CỦA NGÂN HÀNG (BANKING KPIs) ---
+            ["NIM (%)", "Biên lãi ròng: Chênh lệch thực tế giữa lãi cho vay và lãi huy động."],
+            ["LDR (%)", "Dư nợ/Huy động: Mức độ tối ưu vốn (Cao quá = Rủi ro thanh khoản)."],
+            ["CIR (Lần)", "Chi phí/Thu nhập: Tốn bao nhiêu đồng phí để kiếm 1 đồng doanh thu (Thấp là tốt)."],
+
+            # --- NHÓM 3: ĐỊNH GIÁ (VALUATION - Nên có để biết đắt/rẻ) ---
+            ["EPS (VND)", "Lãi cơ bản trên mỗi cổ phiếu."],
+            ["P/E (Lần)", "Giá/Lợi nhuận: Số năm hòa vốn với mức lợi nhuận hiện tại."],
+            ["P/B (Lần)", "Giá/Sổ sách: Giá cổ phiếu cao gấp mấy lần giá trị tài sản ròng."],
         ]
         for term, desc in glossary:
             print(f"• {term:<25} : {desc}")
@@ -319,10 +369,9 @@ class BusinessAnalyzer:
         print(f"Giá: {info.get('price'):,} ({info.get('pct_change')*100:.2f}%) | Vốn hóa: {info.get('market_cap', 0)/1e9:,.0f} Tỷ")
         
         if info['officers']:
-            print(f"\nBAN LÃNH ĐẠO (Top 5):")
+            print(f"\nBAN LÃNH ĐẠO:")
             for p in info['officers'][:5]: print(f" - {p.get('officer_name')} ({p.get('officer_position')})")
         
-        # Sửa lại: Dùng display_text_table cho console
         self.display_text_table(info['news'], 'date_str', 'news_title', 'news_source_link', f"TIN TỨC MỚI NHẤT")
         self.display_text_table(info['events'], 'date_str', 'display_name', 'event_link', f"SỰ KIỆN DOANH NGHIỆP")
 
@@ -339,7 +388,6 @@ class BusinessAnalyzer:
         
         self.display_glossary()
 
-# --- CHẠY CHƯƠNG TRÌNH ---
 if __name__ == "__main__":
     try:
         symbol = input("Nhập mã cổ phiếu (VD: ACB, HPG): ")
