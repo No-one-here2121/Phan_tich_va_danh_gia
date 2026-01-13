@@ -142,7 +142,6 @@ class BusinessAnalyzer:
 
     def calculate_metrics(self):
         if self.raw_reports.empty: return
-        industry = self.profile_info.get('industry', '').lower()
 
         revenue = self._get_val(['Doanh thu thuần', 'Tổng thu nhập hoạt động'])
         net_income = self._get_val(['Lợi nhuận sau thuế của Cổ đông công ty mẹ', 'Cổ đông của Công ty mẹ'])
@@ -157,6 +156,7 @@ class BusinessAnalyzer:
         capex = self._get_val(['Tiền chi mua sắm', 'Mua sắm TSCĐ'])
         cost_to_operate = (self._get_val(['Chi phí quản lý DN'])).abs()
         total_venue_activity = self._get_val(['Tổng thu nhập hoạt động'])
+        total_assets = self._get_val(['TỔNG CỘNG TÀI SẢN (đồng)'])
 
         #Cho ngan hang
         customer_loan_money = self._get_val(['Cho vay khách hàng'])
@@ -169,6 +169,11 @@ class BusinessAnalyzer:
             self._get_val(['Chứng khoán đầu tư sẵn sàng để bán']) + 
             self._get_val(['Chứng khoán đầu tư giữ đến ngày đáo hạn'])
         )
+        prov_cost = self._get_val(['Chi phí dự phòng rủi ro tín dụng'])
+
+        #Cho chung khoan:
+        fvtpl = self._get_val(['Giá trị thuần đầu tư ngắn hạn (đồng)'])
+        margin_loans = self._get_val(['Các khoản phải thu ngắn hạn (đồng)'])
 
         metrics = pd.DataFrame()
         def safe_div(a, b): return a / b.replace(0, float('nan'))
@@ -192,7 +197,8 @@ class BusinessAnalyzer:
         metrics['Biên LN Ròng (%)'] = safe_div(net_income, revenue) * 100
         metrics['ROE (Quý) (%)'] = safe_div(net_income, equity) * 100 
         metrics['Nợ/Vốn chủ (Lần)'] = safe_div(liabilities, equity)
-        metrics['CIR (Lần)'] = safe_div(cost_to_operate,total_venue_activity)
+
+        industry = self.profile_info.get('industry', '').lower()
         
         if 'ngân hàng' in industry or 'bank' in industry:
             metrics['LDR (%)'] = safe_div(customer_loan_money, (customer_money + value_paper)) * 100
@@ -203,6 +209,20 @@ class BusinessAnalyzer:
             tai_san_sinh_loi_bq = total_earning_assets.rolling(window=2).mean()
             metrics['NIM (%)'] = safe_div(gross_profit*4,tai_san_sinh_loi_bq)*100
             metrics['Biên LN Gộp (%)'] = 0
+            metrics['CIR (%)'] = safe_div(cost_to_operate,total_venue_activity) * 100
+            metrics['Chi phí dự phòng/Tổng dư nợ (%)'] = (safe_div(prov_cost, customer_loan_money) * 100).abs()
+
+        if 'dịch vụ tài chính' in industry or 'môi giới chứng khoán' in industry:
+            metrics['FVTPL/Tổng TS (%)'] = safe_div(fvtpl, total_assets) * 100
+            metrics['Margin/Vốn chủ (Lần)'] = safe_div(margin_loans, equity)
+            metrics['LDR (%)'] = 0
+            metrics['Vòng quay kho'] = 0
+            metrics['FCF (Tỷ)'] = 0
+            metrics['Thanh toán hiện hành (Lần)'] = 0
+            metrics['NIM (%)'] = 0
+            metrics['Biên LN Gộp (%)'] = 0
+            metrics['CIR (%)'] = 0
+            metrics['Chi phí dự phòng/Tổng dư nợ (%)'] = 0
         else: 
             metrics['Biên LN Gộp (%)'] = safe_div(gross_profit, revenue) * 100
             metrics['LDR (%)'] = 0
