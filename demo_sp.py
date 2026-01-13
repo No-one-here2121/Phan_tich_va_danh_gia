@@ -37,7 +37,8 @@ class BusinessAnalyzer:
             overview = self.company.overview()
             if not overview.empty:
                 item = overview.iloc[0]
-                self.profile_info['industry'] = item.get('icb_name3', '') 
+                self.profile_info['industry'] = item.get('icb_name2', '') 
+                self.profile_info['industry2'] = item.get('icb_name4', '')
                 self.profile_info['exchange'] = item.get('exchange', 'VN')
             
             stats = self.company.trading_stats()
@@ -186,6 +187,8 @@ class BusinessAnalyzer:
                 metrics['EPS (VND)'] = self.ratio_df[('Chỉ tiêu định giá', 'EPS (VND)')]
                 metrics['P/E (Lần)'] = self.ratio_df[('Chỉ tiêu định giá', 'P/E')]
                 metrics['P/B (Lần)'] = self.ratio_df[('Chỉ tiêu định giá', 'P/B')]
+                metrics['Biên LN Gộp (%)'] = self.ratio_df[(('Chỉ tiêu thanh khoản', 'Khả năng chi trả lãi vay'))]
+                metrics['ROE (Quý) (%)'] = self.ratio_df[((('Chỉ tiêu khả năng sinh lợi', 'ROE (%)')))]
             except KeyError:
                 pass
         
@@ -193,36 +196,82 @@ class BusinessAnalyzer:
         metrics['Lợi nhuận (Tỷ)'] = net_income
         metrics['Tăng trưởng DT (YoY %)'] = revenue.pct_change(periods=4) * 100
         metrics['Tăng trưởng LN (YoY %)'] = net_income.pct_change(periods=4) * 100
-        metrics['Biên LN Gộp (%)'] = safe_div(gross_profit, revenue) * 100
         metrics['Biên LN Ròng (%)'] = safe_div(net_income, revenue) * 100
-        metrics['ROE (Quý) (%)'] = safe_div(net_income, equity) * 100 
-        metrics['Nợ/Vốn chủ (Lần)'] = safe_div(liabilities, equity)
+        metrics['Nợ vay/Vốn chủ'] = self.ratio_df[((('Chỉ tiêu cơ cấu nguồn vốn', '(Vay NH+DH)/VCSH')))]
 
         industry = self.profile_info.get('industry', '').lower()
-        
+        industry2 = self.profile_info.get('industry2', '').lower()
+
         if 'ngân hàng' in industry or 'bank' in industry:
             metrics['LDR (%)'] = safe_div(customer_loan_money, (customer_money + value_paper)) * 100
-            metrics['Vòng quay kho'] = 0
-            metrics['FCF (Tỷ)'] = 0
-            metrics['Thanh toán hiện hành (Lần)'] = 0
             total_earning_assets = customer_loan_money + money_in_VN_bank + money_in_other_bank + money_from_business
             tai_san_sinh_loi_bq = total_earning_assets.rolling(window=2).mean()
             metrics['NIM (%)'] = safe_div(gross_profit*4,tai_san_sinh_loi_bq)*100
-            metrics['Biên LN Gộp (%)'] = 0
             metrics['CIR (%)'] = safe_div(cost_to_operate,total_venue_activity) * 100
             metrics['Chi phí dự phòng/Tổng dư nợ (%)'] = (safe_div(prov_cost, customer_loan_money) * 100).abs()
-
         if 'dịch vụ tài chính' in industry or 'môi giới chứng khoán' in industry:
             metrics['FVTPL/Tổng TS (%)'] = safe_div(fvtpl, total_assets) * 100
             metrics['Margin/Vốn chủ (Lần)'] = safe_div(margin_loans, equity)
-            metrics['LDR (%)'] = 0
-            metrics['Vòng quay kho'] = 0
-            metrics['FCF (Tỷ)'] = 0
-            metrics['Thanh toán hiện hành (Lần)'] = 0
-            metrics['NIM (%)'] = 0
-            metrics['Biên LN Gộp (%)'] = 0
-            metrics['CIR (%)'] = 0
-            metrics['Chi phí dự phòng/Tổng dư nợ (%)'] = 0
+        if 'bảo hiểm' in industry:
+            gross_profit = self._get_val(['Lãi gộp'])
+            cogs_proxy = revenue - gross_profit
+            selling_exp = self._get_val(['Chi phí bán hàng']).abs()
+            total_costs = cogs_proxy + selling_exp + cost_to_operate
+            metrics['Combined Ratio (Proxy) (%)'] = safe_div(total_costs,revenue) * 100
+            fin_income = self._get_val(['Thu nhập tài chính', 'Doanh thu hoạt động tài chính'])
+            fin_cost = self._get_val(['Chi phí tài chính', 'Chi phí hoạt động tài chính']).abs()
+            
+            # Lấy tài sản đầu tư từ BS (Tiền + Đầu tư ngắn + Đầu tư dài)
+            inv_assets = (self._get_val(['Tiền và tương đương tiền (đồng)', 'Tiền và tương đương tiền']) + 
+                          self._get_val(['Đầu tư tài chính ngắn hạn', 'Giá trị thuần đầu tư ngắn hạn (đồng)']) + 
+                          self._get_val(['Đầu tư tài chính dài hạn', 'Đầu tư dài hạn (đồng)']))
+            
+            avg_inv_assets = (inv_assets + inv_assets.shift(1)) / 2
+            metrics['ROI Đầu tư (%)'] = safe_div(fin_income - fin_cost, avg_inv_assets) * 100
+        if 'xây dựng' in industry2:
+            metrics['Bao phủ lãi vay'] = self.ratio_df[((('Chỉ tiêu thanh khoản', 'Khả năng chi trả lãi vay')))]
+            metrics['Khoản phải thu (Ngày)'] = self.ratio_df[((('Chỉ tiêu hiệu quả hoạt động', 'Số ngày thu tiền bình quân')))]
+        if 'bất động sản' in industry:
+            prepay = self._get_val(['Người mua trả tiền trước ngắn hạn (đồng)', 'Người mua trả tiền trước ngắn hạn'])
+            inventory = self._get_val(['Hàng tồn kho, ròng (đồng)', 'Hàng tồn kho ròng'])
+            metrics['Tỷ lệ Trả trước/Tồn kho (%)'] = safe_div(prepay, inventory) * 100
+            metrics['Hàng tồn kho (Tỷ)'] = inventory
+            metrics['Người mua trả trước (Tỷ)'] = prepay
+            short_debt = self._get_val(['Vay và nợ thuê tài chính ngắn hạn (đồng)'])
+            long_debt = self._get_val(['Vay và nợ thuê tài chính dài hạn (đồng)'])
+            total_debt = short_debt + long_debt
+            cash = self._get_val(['Tiền và tương đương tiền (đồng)'])
+            net_debt = total_debt - cash
+            metrics['Vay ròng/Vốn chủ (Lần)'] = safe_div(net_debt, equity)
+            metrics['Bao phủ lãi vay'] = self.ratio_df[((('Chỉ tiêu thanh khoản', 'Khả năng chi trả lãi vay')))]
+            metrics['FCF (Tỷ)'] = ocf - capex
+        if 'điện, nước & xăng dầu khí đốt' in industry or 'dầu khí' in industry:
+            avg_inv = (inventory + inventory.shift(1)) / 2
+            metrics['Số ngày tồn kho (Ngày)'] = safe_div(avg_inv * 90, cogs)
+            cash = self._get_val(['Tiền và tương đương tiền (đồng)'])
+            short_invest = self._get_val(['Giá trị thuần đầu tư ngắn hạn (đồng)'])
+            total_cash_pile = cash + short_invest
+            metrics['Tổng tiền & ĐT ngắn hạn (Tỷ)'] = total_cash_pile
+            short_debt = self._get_val(['Vay và nợ thuê tài chính ngắn hạn (đồng)'])
+            long_debt = self._get_val(['Vay và nợ thuê tài chính dài hạn (đồng)'])
+            total_debt = short_debt + long_debt
+            cash = self._get_val(['Tiền và tương đương tiền (đồng)'])
+            net_debt = total_debt - cash
+            metrics['Vay ròng/Vốn chủ (Lần)'] = safe_div(net_debt, equity)
+            metrics['FCF (Tỷ)'] = ocf - capex
+            div_received = self._get_val(['Tiền thu cổ tức và lợi nhuận được chia'])
+            if div_received.sum() > 0:
+                metrics['Cổ tức nhận được (Tỷ)'] = div_received
+            pbt = self._get_val(['LN trước thuế', 'Lãi/Lỗ ròng trước thuế'])
+            interest = self._get_val(['Chi phí tiền lãi vay']).abs() 
+            depreciation = self._get_val(['Khấu hao TSCĐ']).abs()   
+            ebitda = pbt + interest + depreciation
+            metrics['EBITDA (Tỷ)'] = ebitda
+            metrics['EBITDA Margin (%)'] = safe_div(ebitda, revenue) * 100
+            gross_profit = self._get_val(['Lãi gộp'])
+            metrics['Biên LN Gộp (%)'] = safe_div(gross_profit, revenue) * 100 
+            #thieu san xuat va thuong mai,vat lieu
+            #can refector
         else: 
             metrics['Biên LN Gộp (%)'] = safe_div(gross_profit, revenue) * 100
             metrics['LDR (%)'] = 0
