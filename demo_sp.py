@@ -4,12 +4,10 @@ import seaborn as sns
 import numpy as np
 import warnings
 from datetime import datetime, timedelta
-from vnstock import Finance, Company, Quote
+from vnstock import Finance, Company, Quote, Listing
 
-# Tắt cảnh báo
 warnings.filterwarnings("ignore")
 
-# Cấu hình hiển thị pandas
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', 100)
 pd.set_option('display.width', 1000) 
@@ -29,12 +27,26 @@ class BusinessAnalyzer:
         self.profile_info = {
             'officers': [], 'subsidiaries': [], 'shareholders': pd.DataFrame(),
             'news': [], 'events': [], 'market_cap': 0,
-            'industry': '', 'industry2': '', 'exchange': '', 'price': 0, 'pct_change': 0
+            'industry': '', 'industry2': '', 'exchange': '', 'price': 0, 'pct_change': 0,
+            # Thông tin chi tiết công ty
+            'organ_name': '', 'short_name': '', 'website': '', 'established_year': '', 'no_employees': 0,
+            'no_shareholders': 0, 'foreign_percent': 0, 'outstanding_share': 0, 'issue_share': 0,
+            'charter_capital': 0
         } 
 
     def get_company_info(self):
         print(f"--- Đang tải thông tin {self.symbol} (Nguồn: VCI) ---")
         try:
+            # Lấy tên công ty đầy đủ từ Listing
+            try:
+                listing = Listing()
+                all_symbols = listing.all_symbols()
+                company_row = all_symbols[all_symbols['symbol'] == self.symbol]
+                if not company_row.empty:
+                    self.profile_info['organ_name'] = company_row.iloc[0].get('organ_name', '')
+            except:
+                pass
+            
             # 1. Thông tin chung
             overview = self.company.overview()
             if not overview.empty:
@@ -42,10 +54,20 @@ class BusinessAnalyzer:
                 self.profile_info.update({
                     'industry': item.get('icb_name2', ''),
                     'industry2': item.get('icb_name4', ''),
-                    'exchange': item.get('exchange', 'VN')
+                    'exchange': item.get('exchange', 'VN'),
+                    # Thông tin bổ sung từ overview
+                    'short_name': item.get('shortName', item.get('short_name', '')),
+                    'website': item.get('website', ''),
+                    'established_year': item.get('establishedYear', item.get('established_year', '')),
+                    'no_employees': item.get('noEmployees', item.get('no_employees', 0)),
+                    'no_shareholders': item.get('noShareholders', item.get('no_shareholders', 0)),
+                    'foreign_percent': item.get('foreignPercent', item.get('foreign_percent', 0)),
+                    'outstanding_share': item.get('outstandingShare', item.get('outstanding_share', 0)),
+                    'issue_share': item.get('issueShare', item.get('issue_share', 0)),
+                    'charter_capital': item.get('charterCapital', item.get('charter_capital', 0))
                 })
             
-            # 2. Giá cả
+            # Giá cả
             stats = self.company.trading_stats()
             if not stats.empty:
                 item = stats.iloc[0]
@@ -54,12 +76,10 @@ class BusinessAnalyzer:
                     'pct_change': item.get('price_change_pct', 0)
                 })
             
-            # 3. Thông tin phụ
+            # Thông tin phụ
             self._fetch_sub_info()
             
-            # 4. MARKET CAP (Đã sửa lại logic truy cập MultiIndex chuẩn xác nhất)
             try:
-                # Ưu tiên 1: Lấy từ trading_stats (thường chuẩn xác nhất)
                 if not stats.empty and 'market_cap' in stats.columns:
                     val = float(stats.iloc[0]['market_cap'])
                     if val > 0:
@@ -69,7 +89,7 @@ class BusinessAnalyzer:
                         else: # Nếu số quá lớn -> đã là đơn vị Đồng
                             self.profile_info['market_cap'] = val
 
-                # Ưu tiên 2: Nếu chưa có, lấy từ Ratio (như code cũ nhưng thêm kiểm tra)
+                # Ưu tiên 2: Nếu chưa có, lấy từ Ratio 
                 if self.profile_info['market_cap'] == 0:
                     if self.ratio_df.empty:
                         self.ratio_df = self.finance.ratio(period='quarter', lang='vi')
@@ -86,7 +106,6 @@ class BusinessAnalyzer:
                         if cap_col is not None and not cap_col.empty:
                             raw_val = float(cap_col.iloc[-1]) # Ép kiểu float để tránh tràn số
                             
-                            # LOGIC QUAN TRỌNG: Kiểm tra độ lớn của số
                             # Nếu raw_val > 100 tỷ -> Đã là đơn vị Đồng -> Giữ nguyên
                             # Nếu raw_val < 100 tỷ (VD: 264,000) -> Là đơn vị Tỷ -> Nhân 1 tỷ
                             if raw_val > 100_000_000_000:
@@ -184,7 +203,9 @@ class BusinessAnalyzer:
             if not matches: matches = [c for c in self.raw_reports.columns if k.lower() in c.lower()]
             if matches:
                 s = pd.to_numeric(self.raw_reports[matches[0]], errors='coerce').fillna(0)
-                if s.abs().max() > 100_000_000_000: return s / 1_000_000_000
+                # Nếu giá trị max > 10 triệu, có khả năng cao là đơn vị Đồng -> chia cho 1 tỷ
+                if s.abs().max() > 10_000_000: 
+                    return s / 1_000_000_000
                 return s
         return pd.Series(0.0, index=self.raw_reports.index)
 
@@ -215,10 +236,8 @@ class BusinessAnalyzer:
         revenue = revenue.sort_index()
         net_income = net_income.sort_index()
 
-        # Thêm chỉ số từ API Ratio
         if not self.ratio_df.empty:
             try:
-                # Dùng .get để tránh lỗi KeyError nếu cột không tồn tại
                 metrics['EPS (VND)'] = self.ratio_df.get(('Chỉ tiêu định giá', 'EPS (VND)'), 0)
                 metrics['P/E (Lần)'] = self.ratio_df.get(('Chỉ tiêu định giá', 'P/E'), 0)
                 metrics['P/B (Lần)'] = self.ratio_df.get(('Chỉ tiêu định giá', 'P/B'), 0)
@@ -302,7 +321,7 @@ class BusinessAnalyzer:
             if not self.ratio_df.empty:
                  metrics['Thanh toán hiện hành'] = self.ratio_df.get(('Chỉ tiêu thanh khoản', 'Chỉ số thanh toán hiện thời'), 0)
 
-        elif 'sản xuất và khai thác dầu khí' in industry2 or 'điện, nước & xăng dầu khí đốt' in industry:
+        elif 'dầu khí' in industry2 or 'điện' in industry or 'năng lượng' in industry or 'năng lượng' in industry2:
             fixed_assets = self._get_val(['Tài sản cố định (đồng)', 'Tài sản cố định'])
             
             depreciation = self._get_val(['Khấu hao TSCĐ'])
@@ -324,7 +343,7 @@ class BusinessAnalyzer:
 
             metrics['Tỷ trọng TSCĐ (%)'] = safe_div(fixed_assets, total_assets) * 100
 
-            metrics['FCF (Tỷ)'] = ocf + capex 
+            metrics['FCF (Tỷ)'] = ocf - capex.abs() 
             
             div_cash_paid = self._get_val(['Cổ tức đã trả']).abs()
             metrics['Cổ tức tiền mặt đã trả (Tỷ)'] = div_cash_paid
@@ -333,25 +352,64 @@ class BusinessAnalyzer:
             metrics['Biên LN Gộp (%)'] = safe_div(gross_profit, revenue) * 100
             metrics['Vòng quay kho'] = safe_div(cogs, inventory)
             metrics['Thanh toán hiện hành'] = safe_div(cur_asset, cur_liab)
-            metrics['FCF (Tỷ)'] = ocf + capex 
+            metrics['FCF (Tỷ)'] = ocf - capex.abs() 
             
             # Vay nợ
             total_debt = self._get_val(['Vay và nợ thuê tài chính ngắn hạn']) + self._get_val(['Vay và nợ thuê tài chính dài hạn'])
             cash = self._get_val(['Tiền và tương đương tiền'])
             metrics['Vay ròng/Vốn chủ (Lần)'] = safe_div(total_debt - cash, equity)
 
+        # Đảm bảo FCF luôn ở đơn vị Tỷ
+        if 'FCF (Tỷ)' in metrics.columns:
+            fcf_series = metrics['FCF (Tỷ)']
+            # Nếu có giá trị tuyệt đối > 10000 (đã là đơn vị đồng) thì chia cho 1 tỷ
+            if fcf_series.abs().max() > 10000:
+                metrics['FCF (Tỷ)'] = fcf_series / 1_000_000_000
+
         self.final_metrics = metrics.round(2).sort_index()
         return self.final_metrics
 
     # --- DISPLAY ---
     def visualize_stock_price(self):
-        if self.price_history.empty: return
-        df = self.price_history.sort_index()
+        """Vẽ biểu đồ giá lịch sử với các chỉ báo kỹ thuật và volume"""
+        if self.price_history.empty: 
+            print("Không có dữ liệu giá lịch sử")
+            return
+            
+        df = self.price_history.sort_index().copy()
+        
+        # Tính các đường trung bình động
+        df['SMA20'] = df['close'].rolling(20).mean()
         df['SMA50'] = df['close'].rolling(50).mean()
-        plt.figure(figsize=(12, 6))
-        plt.plot(df.index, df['close'], label='Giá', color='#1f77b4')
-        plt.plot(df.index, df['SMA50'], label='SMA50', linestyle='--', color='orange')
-        plt.title(f'BIỂU ĐỒ GIÁ {self.symbol}'); plt.legend(); plt.grid(True, alpha=0.5); plt.tight_layout(); plt.show()
+        df['SMA200'] = df['close'].rolling(200).mean()
+        
+        # Tạo figure với 2 subplot (Giá và Volume)
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 8), gridspec_kw={'height_ratios': [3, 1]}, sharex=True)
+        
+        # Subplot 1: Biểu đồ giá + chỉ báo
+        ax1.plot(df.index, df['close'], label='Giá đóng cửa', color='#1f77b4', linewidth=1.5)
+        ax1.plot(df.index, df['SMA20'], label='SMA20', linestyle='--', color='#ff7f0e', alpha=0.8, linewidth=1.2)
+        ax1.plot(df.index, df['SMA50'], label='SMA50', linestyle='--', color='#2ca02c', alpha=0.8, linewidth=1.2)
+        ax1.plot(df.index, df['SMA200'], label='SMA200', linestyle='--', color='#d62728', alpha=0.7, linewidth=1.2)
+        
+        ax1.set_title(f'LỊCH SỬ GIÁ {self.symbol} 1 năm giao dịch', fontsize=14, fontweight='bold')
+        ax1.set_ylabel('Giá (VNĐ)', fontsize=11)
+        ax1.legend(loc='best', fontsize=9)
+        ax1.grid(True, alpha=0.3, linestyle=':')
+        
+        # Subplot 2: Volume
+        colors = ['green' if df['close'].iloc[i] >= df['open'].iloc[i] else 'red' 
+                  for i in range(len(df))]
+        ax2.bar(df.index, df['volume'], color=colors, alpha=0.6, width=0.8)
+        ax2.set_ylabel('Khối lượng', fontsize=11)
+        ax2.set_xlabel('Thời gian', fontsize=11)
+        ax2.grid(True, alpha=0.3, linestyle=':')
+        
+        # Format trục x
+        ax2.tick_params(axis='x', rotation=45)
+        
+        plt.tight_layout()
+        plt.show()
 
     def visualize_financials(self, df):
         try:
@@ -361,11 +419,260 @@ class BusinessAnalyzer:
             print(plot_data.T.reset_index().rename(columns={'index': 'CHỈ TIÊU'}).to_string(index=False))
             print("-" * 120)
             
+            
             cols_growth = ['Tăng trưởng DT (%)', 'Tăng trưởng LN (%)']
             if all(c in plot_data.columns for c in cols_growth):
                 plot_data[cols_growth].plot(kind='bar', figsize=(12, 6), title=f'{self.symbol} - TĂNG TRƯỞNG YoY')
                 plt.axhline(0, color='black', lw=1); plt.show()
+            
+            # Vẽ biểu đồ chuyên biệt theo ngành
+            self.visualize_industry_specific(df)
         except: pass
+    
+    def visualize_industry_specific(self, df):
+        """Vẽ biểu đồ phân tích theo ngành nghề cụ thể"""
+        industry = self.profile_info.get('industry', '').lower()
+        industry2 = self.profile_info.get('industry2', '').lower()
+        plot_data = df.tail(8)
+        
+        # NGÂN HÀNG
+        if 'ngân hàng' in industry or 'bank' in industry:
+            fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+            fig.suptitle(f'{self.symbol} - PHÂN TÍCH NGÂN HÀNG', fontsize=14, fontweight='bold')
+            
+            # LDR (Loan to Deposit Ratio)
+            if 'LDR (%)' in plot_data.columns:
+                axes[0, 0].plot(plot_data.index, plot_data['LDR (%)'], marker='o', color='#1f77b4', linewidth=2)
+                axes[0, 0].axhline(85, color='green', linestyle='--', alpha=0.5, label='Ngưỡng an toàn 85%')
+                axes[0, 0].set_title('Tỷ lệ Cho vay/Huy động (LDR)')
+                axes[0, 0].set_ylabel('LDR (%)')
+                axes[0, 0].legend()
+                axes[0, 0].grid(True, alpha=0.3)
+            
+            # NIM (Net Interest Margin)
+            if 'NIM (%)' in plot_data.columns:
+                axes[0, 1].plot(plot_data.index, plot_data['NIM (%)'], marker='s', color='#ff7f0e', linewidth=2)
+                axes[0, 1].set_title('Biên lãi suất ròng (NIM)')
+                axes[0, 1].set_ylabel('NIM (%)')
+                axes[0, 1].grid(True, alpha=0.3)
+            
+            # CIR (Cost to Income Ratio)
+            if 'CIR (%)' in plot_data.columns:
+                axes[1, 0].plot(plot_data.index, plot_data['CIR (%)'], marker='^', color='#2ca02c', linewidth=2)
+                axes[1, 0].axhline(40, color='red', linestyle='--', alpha=0.5, label='Ngưỡng hiệu quả 40%')
+                axes[1, 0].set_title('Tỷ lệ Chi phí/Thu nhập (CIR)')
+                axes[1, 0].set_ylabel('CIR (%)')
+                axes[1, 0].legend()
+                axes[1, 0].grid(True, alpha=0.3)
+            
+            # ROE
+            if 'ROE (Quý) (%)' in plot_data.columns:
+                axes[1, 1].plot(plot_data.index, plot_data['ROE (Quý) (%)'], marker='D', color='#d62728', linewidth=2)
+                axes[1, 1].set_title('ROE theo Quý')
+                axes[1, 1].set_ylabel('ROE (%)')
+                axes[1, 1].grid(True, alpha=0.3)
+            
+            plt.tight_layout()
+            plt.show()
+        
+        # BẤT ĐỘNG SẢN
+        elif 'bất động sản' in industry:
+            fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+            fig.suptitle(f'{self.symbol} - PHÂN TÍCH BẤT ĐỘNG SẢN', fontsize=14, fontweight='bold')
+            
+            # Hàng tồn kho
+            if 'Hàng tồn kho (Tỷ)' in plot_data.columns:
+                axes[0, 0].bar(range(len(plot_data)), plot_data['Hàng tồn kho (Tỷ)'], color='#1f77b4', alpha=0.7)
+                axes[0, 0].set_title('Hàng tồn kho (Dự án BĐS)')
+                axes[0, 0].set_ylabel('Tỷ đồng')
+                axes[0, 0].set_xticks(range(len(plot_data)))
+                axes[0, 0].set_xticklabels(plot_data.index, rotation=45)
+                axes[0, 0].grid(True, alpha=0.3, axis='y')
+            
+            # Người mua trả trước
+            if 'Người mua trả trước (Tỷ)' in plot_data.columns:
+                axes[0, 1].bar(range(len(plot_data)), plot_data['Người mua trả trước (Tỷ)'], color='#ff7f0e', alpha=0.7)
+                axes[0, 1].set_title('Người mua trả tiền trước')
+                axes[0, 1].set_ylabel('Tỷ đồng')
+                axes[0, 1].set_xticks(range(len(plot_data)))
+                axes[0, 1].set_xticklabels(plot_data.index, rotation=45)
+                axes[0, 1].grid(True, alpha=0.3, axis='y')
+            
+            # Tỷ lệ Trả trước/Tồn kho
+            if 'Tỷ lệ Trả trước/Tồn kho (%)' in plot_data.columns:
+                axes[1, 0].plot(plot_data.index, plot_data['Tỷ lệ Trả trước/Tồn kho (%)'], marker='o', color='#2ca02c', linewidth=2)
+                axes[1, 0].set_title('Tỷ lệ Trả trước/Tồn kho')
+                axes[1, 0].set_ylabel('%')
+                axes[1, 0].grid(True, alpha=0.3)
+            
+            # FCF
+            if 'FCF (Tỷ)' in plot_data.columns:
+                colors = ['green' if x >= 0 else 'red' for x in plot_data['FCF (Tỷ)']]
+                axes[1, 1].bar(range(len(plot_data)), plot_data['FCF (Tỷ)'], color=colors, alpha=0.7)
+                axes[1, 1].axhline(0, color='black', linewidth=1)
+                axes[1, 1].set_title('Dòng tiền tự do (FCF)')
+                axes[1, 1].set_ylabel('Tỷ đồng')
+                axes[1, 1].set_xticks(range(len(plot_data)))
+                axes[1, 1].set_xticklabels(plot_data.index, rotation=45)
+                axes[1, 1].grid(True, alpha=0.3, axis='y')
+            
+            plt.tight_layout()
+            plt.show()
+        
+        # BẢO HIỂM
+        elif 'bảo hiểm' in industry:
+            fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+            fig.suptitle(f'{self.symbol} - PHÂN TÍCH BẢO HIỂM', fontsize=14, fontweight='bold')
+            
+            # Tỷ trọng đầu tư
+            if 'Đầu tư/Tổng TS (%)' in plot_data.columns:
+                axes[0, 0].plot(plot_data.index, plot_data['Đầu tư/Tổng TS (%)'], marker='o', color='#1f77b4', linewidth=2)
+                axes[0, 0].set_title('Tỷ trọng Đầu tư/Tổng tài sản')
+                axes[0, 0].set_ylabel('%')
+                axes[0, 0].grid(True, alpha=0.3)
+            
+            # Lợi suất đầu tư
+            if 'Lợi suất đầu tư (%)' in plot_data.columns:
+                axes[0, 1].plot(plot_data.index, plot_data['Lợi suất đầu tư (%)'], marker='s', color='#ff7f0e', linewidth=2)
+                axes[0, 1].set_title('Lợi suất đầu tư')
+                axes[0, 1].set_ylabel('%')
+                axes[0, 1].grid(True, alpha=0.3)
+            
+            # Tỷ lệ chi phí hoạt động
+            if 'Tỷ lệ chi phí HĐ (%)' in plot_data.columns:
+                axes[1, 0].plot(plot_data.index, plot_data['Tỷ lệ chi phí HĐ (%)'], marker='^', color='#2ca02c', linewidth=2)
+                axes[1, 0].set_title('Tỷ lệ chi phí hoạt động')
+                axes[1, 0].set_ylabel('%')
+                axes[1, 0].grid(True, alpha=0.3)
+            
+            # Đòn bẩy tài chính
+            if 'Đòn bẩy tài chính (Lần)' in plot_data.columns:
+                axes[1, 1].plot(plot_data.index, plot_data['Đòn bẩy tài chính (Lần)'], marker='D', color='#d62728', linewidth=2)
+                axes[1, 1].set_title('Đòn bẩy tài chính')
+                axes[1, 1].set_ylabel('Lần')
+                axes[1, 1].grid(True, alpha=0.3)
+            
+            plt.tight_layout()
+            plt.show()
+        
+
+        # DẦU KHÍ / ĐIỆN
+        elif 'dầu khí' in industry2 or 'điện' in industry:
+            fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+            fig.suptitle(f'{self.symbol} - PHÂN TÍCH NĂNG LƯỢNG', fontsize=14, fontweight='bold')
+            
+            # EBITDA
+            if 'EBITDA (Tỷ)' in plot_data.columns:
+                axes[0, 0].bar(range(len(plot_data)), plot_data['EBITDA (Tỷ)'], color='#1f77b4', alpha=0.7)
+                axes[0, 0].set_title('EBITDA')
+                axes[0, 0].set_ylabel('Tỷ đồng')
+                axes[0, 0].set_xticks(range(len(plot_data)))
+                axes[0, 0].set_xticklabels(plot_data.index, rotation=45)
+                axes[0, 0].grid(True, alpha=0.3, axis='y')
+            
+            # Biên EBITDA
+            if 'Biên EBITDA (%)' in plot_data.columns:
+                axes[0, 1].plot(plot_data.index, plot_data['Biên EBITDA (%)'], marker='o', color='#ff7f0e', linewidth=2)
+                axes[0, 1].set_title('Biên EBITDA')
+                axes[0, 1].set_ylabel('%')
+                axes[0, 1].grid(True, alpha=0.3)
+            
+            # Vay ròng/EBITDA
+            if 'Vay ròng/EBITDA (Lần)' in plot_data.columns:
+                axes[1, 0].plot(plot_data.index, plot_data['Vay ròng/EBITDA (Lần)'], marker='s', color='#2ca02c', linewidth=2)
+                axes[1, 0].axhline(3, color='red', linestyle='--', alpha=0.5, label='Ngưỡng an toàn 3x')
+                axes[1, 0].set_title('Vay ròng/EBITDA')
+                axes[1, 0].set_ylabel('Lần')
+                axes[1, 0].legend()
+                axes[1, 0].grid(True, alpha=0.3)
+            
+            # FCF
+            if 'FCF (Tỷ)' in plot_data.columns:
+                colors = ['green' if x >= 0 else 'red' for x in plot_data['FCF (Tỷ)']]
+                axes[1, 1].bar(range(len(plot_data)), plot_data['FCF (Tỷ)'], color=colors, alpha=0.7)
+                axes[1, 1].axhline(0, color='black', linewidth=1)
+                axes[1, 1].set_title('Dòng tiền tự do (FCF)')
+                axes[1, 1].set_ylabel('Tỷ đồng')
+                axes[1, 1].set_xticks(range(len(plot_data)))
+                axes[1, 1].set_xticklabels(plot_data.index, rotation=45)
+                axes[1, 1].grid(True, alpha=0.3, axis='y')
+            
+            plt.tight_layout()
+            plt.show()
+        
+        # SẢN XUẤT / THƯƠNG MẠI (Mặc định)
+        else:
+            fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+            fig.suptitle(f'{self.symbol} - PHÂN TÍCH SẢN XUẤT/THƯƠNG MẠI', fontsize=14, fontweight='bold')
+            
+            # Biên lợi nhuận
+            has_gross = 'Biên LN Gộp (%)' in plot_data.columns
+            has_net = 'Biên LN Ròng (%)' in plot_data.columns
+            
+            if has_gross or has_net:
+                if has_gross:
+                    axes[0, 0].plot(plot_data.index, plot_data['Biên LN Gộp (%)'], marker='o', color='#1f77b4', linewidth=2, label='Biên LN Gộp')
+                if has_net:
+                    axes[0, 0].plot(plot_data.index, plot_data['Biên LN Ròng (%)'], marker='s', color='#ff7f0e', linewidth=2, label='Biên LN Ròng')
+                axes[0, 0].set_title('Biên lợi nhuận')
+                axes[0, 0].set_ylabel('%')
+                axes[0, 0].legend()
+                axes[0, 0].grid(True, alpha=0.3)
+            
+            # Vòng quay kho
+            if 'Vòng quay kho' in plot_data.columns:
+                axes[0, 1].bar(range(len(plot_data)), plot_data['Vòng quay kho'], color='#2ca02c', alpha=0.7)
+                axes[0, 1].set_title('Vòng quay hàng tồn kho')
+                axes[0, 1].set_ylabel('Lần')
+                axes[0, 1].set_xticks(range(len(plot_data)))
+                axes[0, 1].set_xticklabels(plot_data.index, rotation=45)
+                axes[0, 1].grid(True, alpha=0.3, axis='y')
+            
+            # Thanh toán hiện hành
+            if 'Thanh toán hiện hành' in plot_data.columns:
+                axes[1, 0].plot(plot_data.index, plot_data['Thanh toán hiện hành'], marker='^', color='#d62728', linewidth=2)
+                axes[1, 0].axhline(1, color='red', linestyle='--', alpha=0.5, label='Ngưỡng an toàn 1.0')
+                axes[1, 0].set_title('Khả năng thanh toán hiện hành')
+                axes[1, 0].set_ylabel('Lần')
+                axes[1, 0].legend()
+                axes[1, 0].grid(True, alpha=0.3)
+            
+            # FCF
+            if 'FCF (Tỷ)' in plot_data.columns:
+                colors = ['green' if x >= 0 else 'red' for x in plot_data['FCF (Tỷ)']]
+                axes[1, 1].bar(range(len(plot_data)), plot_data['FCF (Tỷ)'], color=colors, alpha=0.7)
+                axes[1, 1].axhline(0, color='black', linewidth=1)
+                axes[1, 1].set_title('Dòng tiền tự do (FCF)')
+                axes[1, 1].set_ylabel('Tỷ đồng')
+                axes[1, 1].set_xticks(range(len(plot_data)))
+                axes[1, 1].set_xticklabels(plot_data.index, rotation=45)
+                axes[1, 1].grid(True, alpha=0.3, axis='y')
+            
+            plt.tight_layout()
+            plt.show()
+
+    def display_price_history(self, num_days=30):
+        """Hiển thị bảng giá lịch sử chi tiết"""
+        if self.price_history.empty:
+            print("Không có dữ liệu giá lịch sử")
+            return
+        
+        df = self.price_history.sort_index(ascending=False).head(num_days).copy()
+        
+        # Tạo bảng hiển thị
+        display_df = pd.DataFrame({
+            'Ngày': df.index.strftime('%d/%m/%Y'),
+            'Mở cửa': df['open'].apply(lambda x: f"{x:,.2f}"),
+            'Cao nhất': df['high'].apply(lambda x: f"{x:,.2f}"),
+            'Thấp nhất': df['low'].apply(lambda x: f"{x:,.2f}"),
+            'Đóng cửa': df['close'].apply(lambda x: f"{x:,.2f}"),
+            'Khối lượng': df['volume'].apply(lambda x: f"{int(x):,}")
+        })
+        
+        print(f"\n>>> LỊCH SỬ GIÁ ({num_days} PHIÊN GẦN NHẤT):")
+        print("-" * 100)
+        print(display_df.to_string(index=False))
+        print("-" * 100)
 
     def visualize_ownership(self):
         df_sh = self.profile_info.get('shareholders')
@@ -411,7 +718,50 @@ class BusinessAnalyzer:
         else:
             cap_str = "N/A"
 
-        print(f"Giá: {info.get('price', 0):,} ({info.get('pct_change', 0)*100:.2f}%) | Vốn hóa: {cap_str}")
+        # Hiển thị thông tin chi tiết công ty
+        print(f"\n>>> THÔNG TIN CÔNG TY:")
+        
+        # Ưu tiên hiển thị organ_name (tên đầy đủ), nếu không có thì dùng short_name
+        company_name = info.get('organ_name', '') or info.get('short_name', '')
+        if company_name:
+            print(f"Tên công ty: {company_name}")
+        print(f"Ngành: {info.get('industry', 'N/A')}")
+        if info.get('industry2'):
+            print(f"Phân ngành: {info.get('industry2')}")
+        print(f"Sàn giao dịch: {info.get('exchange', 'N/A')}")
+        
+        if info.get('website'):
+            print(f"Website: {info.get('website')}")
+        
+        if info.get('established_year'):
+            print(f"Năm thành lập: {info.get('established_year')}")
+        
+        employees = info.get('no_employees', 0)
+        if employees > 0:
+            print(f"Số lượng nhân viên: {employees:,} người")
+        
+        shareholders = info.get('no_shareholders', 0)
+        if shareholders > 0:
+            print(f"Số lượng cổ đông: {shareholders:,}")
+        
+        foreign = info.get('foreign_percent', 0)
+        if foreign > 0:
+            print(f"Tỷ lệ sở hữu nước ngoài: {foreign:.2f}%")
+        
+        outstanding = info.get('outstanding_share', 0)
+        if outstanding > 0:
+            print(f"Cổ phiếu lưu hành: {outstanding:,.0f} CP")
+        
+        charter = info.get('charter_capital', 0)
+        if charter > 0:
+            # Chuyển đổi đơn vị (thường là triệu đồng)
+            if charter < 1000000:  # Nếu < 1 triệu tỷ thì là đơn vị triệu
+                print(f"Vốn điều lệ: {charter:,.0f} triệu VNĐ ({charter/1000:,.2f} tỷ VNĐ)")
+            else:  # Đã là đơn vị đồng
+                print(f"Vốn điều lệ: {charter/1_000_000_000:,.2f} tỷ VNĐ")
+        
+        print(f"\nGiá hiện tại: {info.get('price', 0):,} VNĐ ({info.get('pct_change', 0)*100:.2f}%)")
+        print(f"Vốn hóa thị trường: {cap_str}")
         
         if info['officers']:
             print(f"\n>>> BAN LÃNH ĐẠO:")
@@ -419,6 +769,9 @@ class BusinessAnalyzer:
         
         self.display_text_table(info['news'], 'date_str', 'news_title', 'news_source_link', "TIN TỨC")
         self.display_text_table(info['events'], 'date_str', 'display_name', 'event_link', "SỰ KIỆN DOANH NGHIỆP")
+
+        # Hiển thị bảng giá lịch sử
+        self.display_price_history(num_days=30)
 
         print("\n>>> XU HƯỚNG GIÁ:"); self.visualize_stock_price()
         if self.final_metrics is not None:
