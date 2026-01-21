@@ -6,12 +6,137 @@ import warnings
 from datetime import datetime, timedelta
 from vnstock import Finance, Company, Quote, Listing
 
+try:
+    from statsmodels.tsa.seasonal import seasonal_decompose
+    HAS_STATSMODELS = True
+except ImportError:
+    HAS_STATSMODELS = False
+    warnings.warn("statsmodels không được cài đặt. Chức năng seasonal decomposition bị tắt.")
+
 warnings.filterwarnings("ignore")
 
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', 100)
 pd.set_option('display.width', 1000) 
 pd.options.display.float_format = '{:,.2f}'.format
+
+class SeasonalNaNHandler:
+    """Xử lý giá trị NaN bằng Seasonal Decomposition và các phương pháp dự phòng"""
+    
+    def __init__(self, period=4):
+        """
+        Args:
+            period: Chu kỳ mùa vụ (4 cho dữ liệu theo quý, 12 cho theo tháng)
+        """
+        self.period = period
+        self.min_observations = period * 2  # Tối thiểu 2 chu kỳ để phân tách
+    
+    def fill_nan_seasonal(self, series, method='additive'):
+        """
+        Điền NaN bằng seasonal decomposition
+        
+        Args:
+            series: pandas Series chứa dữ liệu cần xử lý
+            method: 'additive' hoặc 'multiplicative'
+        
+        Returns:
+            pandas Series đã được điền NaN
+        """
+        if not HAS_STATSMODELS:
+            return self._fallback_fill(series)
+        
+        # Loại bỏ NaN để kiểm tra độ dài
+        non_nan_count = series.notna().sum()
+        
+        # Nếu không đủ dữ liệu, dùng phương pháp dự phòng
+        if non_nan_count < self.min_observations:
+            return self._fallback_fill(series)
+        
+        # Nếu không có NaN, trả về nguyên bản
+        if series.isna().sum() == 0:
+            return series
+        
+        try:
+            # Tạo bản sao để xử lý
+            filled_series = series.copy()
+            
+            # Bước 1: Điền tạm thời bằng interpolation để có đủ dữ liệu cho decomposition
+            temp_filled = filled_series.interpolate(method='linear', limit_direction='both')
+            
+            # Nếu vẫn còn NaN (ở đầu/cuối), dùng forward/backward fill
+            temp_filled = temp_filled.fillna(method='ffill').fillna(method='bfill')
+            
+            # Bước 2: Áp dụng seasonal decomposition
+            decomposition = seasonal_decompose(
+                temp_filled, 
+                model=method, 
+                period=self.period,
+                extrapolate_trend='freq'
+            )
+            
+            # Bước 3: Chỉ điền vào các vị trí NaN ban đầu
+            # Sử dụng trend + seasonal để dự đoán
+            predicted = decomposition.trend + decomposition.seasonal
+            
+            # Điền vào các vị trí NaN
+            nan_mask = series.isna()
+            filled_series[nan_mask] = predicted[nan_mask]
+            
+            return filled_series
+            
+        except Exception as e:
+            # Nếu seasonal decomposition thất bại, dùng phương pháp dự phòng
+            print(f"Cảnh báo: Seasonal decomposition thất bại ({str(e)}), sử dụng phương pháp dự phòng")
+            return self._fallback_fill(series)
+    
+    def _fallback_fill(self, series):
+        """
+        Phương pháp dự phòng: kết hợp nhiều kỹ thuật
+        1. Interpolation (nội suy tuyến tính)
+        2. Forward fill
+        3. Backward fill
+        4. Mean (nếu vẫn còn NaN)
+        """
+        filled = series.copy()
+        
+        # Bước 1: Interpolation tuyến tính
+        filled = filled.interpolate(method='linear', limit_direction='both')
+        
+        # Bước 2: Forward fill cho các giá trị đầu
+        filled = filled.fillna(method='ffill')
+        
+        # Bước 3: Backward fill cho các giá trị cuối
+        filled = filled.fillna(method='bfill')
+        
+        # Bước 4: Nếu vẫn còn NaN, dùng mean
+        if filled.isna().any():
+            filled = filled.fillna(series.mean())
+        
+        return filled
+    
+    def fill_dataframe(self, df, columns=None, method='additive'):
+        """
+        Điền NaN cho toàn bộ DataFrame
+        
+        Args:
+            df: pandas DataFrame
+            columns: List các cột cần xử lý (None = tất cả cột số)
+            method: 'additive' hoặc 'multiplicative'
+        
+        Returns:
+            pandas DataFrame đã được điền NaN
+        """
+        result = df.copy()
+        
+        if columns is None:
+            # Lấy tất cả cột số
+            columns = result.select_dtypes(include=[np.number]).columns
+        
+        for col in columns:
+            if col in result.columns:
+                result[col] = self.fill_nan_seasonal(result[col], method=method)
+        
+        return result
 
 class BusinessAnalyzer:
     def __init__(self, symbol):
@@ -209,7 +334,14 @@ class BusinessAnalyzer:
                 return s
         return pd.Series(0.0, index=self.raw_reports.index)
 
-    def calculate_metrics(self):
+    def calculate_metrics(self, fill_nan=True, seasonal_method='additive'):
+        """
+        Tính toán các chỉ số tài chính
+        
+        Args:
+            fill_nan: Có tự động điền NaN hay không (mặc định: True)
+            seasonal_method: Phương pháp seasonal decomposition ('additive' hoặc 'multiplicative')
+        """
         if self.raw_reports.empty: return
 
         # Lấy dữ liệu cơ sở
@@ -365,6 +497,27 @@ class BusinessAnalyzer:
             # Nếu có giá trị tuyệt đối > 10000 (đã là đơn vị đồng) thì chia cho 1 tỷ
             if fcf_series.abs().max() > 10000:
                 metrics['FCF (Tỷ)'] = fcf_series / 1_000_000_000
+
+        # ====== XỬ LÝ NaN BẰNG SEASONAL DECOMPOSITION ======
+        if fill_nan and not metrics.empty:
+            print("\n--- Đang xử lý giá trị NaN bằng Seasonal Decomposition... ---")
+            handler = SeasonalNaNHandler(period=4)  # Chu kỳ theo quý
+            
+            # Đếm số NaN trước khi xử lý
+            nan_before = metrics.isna().sum().sum()
+            
+            if nan_before > 0:
+                print(f"Phát hiện {nan_before} giá trị NaN trong dữ liệu")
+                
+                # Áp dụng seasonal decomposition cho tất cả các cột
+                metrics = handler.fill_dataframe(metrics, method=seasonal_method)
+                
+                # Đếm số NaN sau khi xử lý
+                nan_after = metrics.isna().sum().sum()
+                print(f"Còn lại {nan_after} giá trị NaN sau khi xử lý")
+                
+                if nan_before > nan_after:
+                    print(f"✓ Đã điền thành công {nan_before - nan_after} giá trị NaN")
 
         self.final_metrics = metrics.round(2).sort_index()
         return self.final_metrics

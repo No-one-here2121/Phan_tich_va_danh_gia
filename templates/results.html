@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block title %}{{ company_info.symbol }} - Phân tích Cổ phiếu{% endblock %}
+
+{% block content %}
+<div class="container results-container">
+    <!-- Company Header -->
+    <div class="company-header">
+        <div class="back-button">
+            <a href="/" class="btn-back">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                Quay lại
+            </a>
+        </div>
+        <div class="company-title-section">
+            <h1 class="company-symbol">{{ company_info.symbol }}</h1>
+            <h2 class="company-name">{{ company_info.name }}</h2>
+            <div class="company-meta">
+                <span class="meta-tag">{{ company_info.industry }}</span>
+                {% if company_info.industry2 %}
+                <span class="meta-tag">{{ company_info.industry2 }}</span>
+                {% endif %}
+                <span class="meta-tag">{{ company_info.exchange }}</span>
+            </div>
+        </div>
+        <div class="price-box">
+            <div class="current-price">{{ "{:,.0f}".format(company_info.price) }} VNĐ</div>
+            <div class="price-change {% if company_info.pct_change >= 0 %}positive{% else %}negative{% endif %}">
+                {{ "{:+.2f}".format(company_info.pct_change * 100) }}%
+            </div>
+        </div>
+    </div>
+
+    <!-- Company Info Cards -->
+    <div class="info-cards-grid">
+        <div class="info-card">
+            <div class="info-label">Vốn hóa</div>
+            <div class="info-value">{{ company_info.market_cap }}</div>
+        </div>
+        {% if company_info.employees > 0 %}
+        <div class="info-card">
+            <div class="info-label">Nhân viên</div>
+            <div class="info-value">{{ "{:,}".format(company_info.employees) }}</div>
+        </div>
+        {% endif %}
+        {% if company_info.shareholders_count > 0 %}
+        <div class="info-card">
+            <div class="info-label">Cổ đông</div>
+            <div class="info-value">{{ "{:,}".format(company_info.shareholders_count) }}</div>
+        </div>
+        {% endif %}
+        {% if company_info.established_year %}
+        <div class="info-card">
+            <div class="info-label">Thành lập</div>
+            <div class="info-value">{{ company_info.established_year }}</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Price Chart -->
+    {% if price_chart %}
+    <div class="chart-section">
+        <h2 class="section-title">📈 Biểu đồ Giá Lịch sử</h2>
+        <div class="chart-container">
+            <img src="data:image/png;base64,{{ price_chart }}" alt="Biểu đồ giá" class="chart-image">
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Financial Metrics -->
+    {% if metrics_html %}
+    <div class="chart-section">
+        <h2 class="section-title">💰 Chỉ số Tài chính (8 Quý gần nhất)</h2>
+        <div class="table-container">
+            {{ metrics_html | safe }}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Industry Charts -->
+    {% if industry_charts %}
+    <div class="chart-section">
+        <h2 class="section-title">📊 Phân tích Chuyên sâu theo Ngành</h2>
+        {% for chart in industry_charts %}
+        <div class="chart-container">
+            <h3 class="chart-subtitle">{{ chart.title }}</h3>
+            <img src="data:image/png;base64,{{ chart.image }}" alt="{{ chart.title }}" class="chart-image">
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Ownership Chart -->
+    {% if ownership_chart %}
+    <div class="chart-section">
+        <h2 class="section-title">🏢 Cơ cấu Cổ đông</h2>
+        <div class="chart-container">
+            <img src="data:image/png;base64,{{ ownership_chart }}" alt="Cơ cấu cổ đông" class="chart-image">
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Price History Table -->
+    {% if price_history_html %}
+    <div class="chart-section">
+        <h2 class="section-title">📅 Lịch sử Giao dịch (30 phiên gần nhất)</h2>
+        <div class="table-container">
+            {{ price_history_html | safe }}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Leadership -->
+    {% if company_info.officers %}
+    <div class="chart-section">
+        <h2 class="section-title">👔 Ban Lãnh đạo</h2>
+        <div class="officers-grid">
+            {% for officer in company_info.officers %}
+            <div class="officer-card">
+                <div class="officer-name">{{ officer.officer_name }}</div>
+                <div class="officer-position">{{ officer.officer_position or 'N/A' }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- News -->
+    {% if company_info.news %}
+    <div class="chart-section">
+        <h2 class="section-title">📰 Tin tức mới nhất</h2>
+        <div class="news-list">
+            {% for item in company_info.news %}
+            <div class="news-item">
+                <div class="news-date">{{ item.date_str }}</div>
+                <div class="news-title">{{ item.news_title }}</div>
+                {% if item.news_source_link %}
+                <a href="{{ item.news_source_link }}" target="_blank" class="news-link">Xem chi tiết →</a>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Events -->
+    {% if company_info.events %}
+    <div class="chart-section">
+        <h2 class="section-title">📅 Sự kiện Doanh nghiệp</h2>
+        <div class="news-list">
+            {% for event in company_info.events %}
+            <div class="news-item">
+                <div class="news-date">{{ event.date_str }}</div>
+                <div class="news-title">{{ event.display_name }}</div>
+                {% if event.event_link %}
+                <a href="{{ event.event_link }}" target="_blank" class="news-link">Xem chi tiết →</a>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
