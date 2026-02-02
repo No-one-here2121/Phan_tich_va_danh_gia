@@ -6,57 +6,21 @@
 <div class="hero-section">
     <div class="container">
         <div class="hero-content">
-            <h1 class="hero-title">Phân tích Cổ phiếu Chuyên nghiệp</h1>
-            <p class="hero-subtitle">Nhập mã cổ phiếu để xem phân tích tài chính chi tiết</p>
+            <h1 class="hero-title">Phân tích Cổ phiếu</h1>
+            <p class="hero-subtitle">Nhập mã cổ phiếu để xem phân tích</p>
 
             <div class="search-card">
                 <form method="POST" action="/analyze" class="search-form">
                     <div class="input-group">
-                        <input type="text" name="symbol" placeholder="Nhập mã cổ phiếu (VD: ACB, HPG, VNM, VCB...)"
+                        <input type="text" name="symbol" placeholder="Nhập mã cổ phiếu (VD: ACB, HPG, VNM...)"
                             class="search-input" required autofocus>
-                        <button type="submit" class="search-button">
-                            <span>Phân tích</span>
-                            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                            </svg>
-                        </button>
+                        <button type="submit" class="search-button">Phân tích</button>
                     </div>
                 </form>
 
                 {% if error %}
-                <div class="error-message">
-                    <svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd"
-                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                            clip-rule="evenodd" />
-                    </svg>
-                    <span>{{ error }}</span>
-                </div>
+                <div class="error-message">{{ error }}</div>
                 {% endif %}
-            </div>
-
-            <div class="features-grid">
-                <div class="feature-card">
-                    <div class="feature-icon">📈</div>
-                    <h3>Biểu đồ Giá</h3>
-                    <p>Lịch sử giá với các đường MA</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">💰</div>
-                    <h3>Phân tích Tài chính</h3>
-                    <p>Doanh thu, lợi nhuận, FCF...</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">🏢</div>
-                    <h3>Thông tin Doanh nghiệp</h3>
-                    <p>Lãnh đạo, sự kiện, cổ đông...</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">📊</div>
-                    <h3>Phân tích Ngành</h3>
-                    <p>Chỉ số chuyên biệt theo ngành</p>
-                </div>
             </div>
         </div>
     </div>

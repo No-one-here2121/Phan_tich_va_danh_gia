@@ -6,15 +6,8 @@
 <div class="container results-container">
     <!-- Company Header -->
     <div class="company-header">
-        <div class="back-button">
-            <a href="/" class="btn-back">
-                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-                Quay lại
-            </a>
-        </div>
+        <a href="/" class="btn-back">← Quay lại</a>
+
         <div class="company-title-section">
             <h1 class="company-symbol">{{ company_info.symbol }}</h1>
             <h2 class="company-name">{{ company_info.name }}</h2>
@@ -63,7 +56,7 @@
     <!-- Price Chart -->
     {% if price_chart %}
     <div class="chart-section">
-        <h2 class="section-title">📈 Biểu đồ Giá Lịch sử</h2>
+        <h2 class="section-title">Biểu đồ Giá Lịch sử</h2>
         <div class="chart-container">
             <img src="data:image/png;base64,{{ price_chart }}" alt="Biểu đồ giá" class="chart-image">
         </div>
@@ -73,7 +66,7 @@
     <!-- Financial Metrics -->
     {% if metrics_html %}
     <div class="chart-section">
-        <h2 class="section-title">💰 Chỉ số Tài chính (8 Quý gần nhất)</h2>
+        <h2 class="section-title">Chỉ số Tài chính (8 Quý gần nhất)</h2>
         <div class="table-container">
             {{ metrics_html | safe }}
         </div>
@@ -83,7 +76,7 @@
     <!-- Industry Charts -->
     {% if industry_charts %}
     <div class="chart-section">
-        <h2 class="section-title">📊 Phân tích Chuyên sâu theo Ngành</h2>
+        <h2 class="section-title">Phân tích Chuyên sâu theo Ngành</h2>
         {% for chart in industry_charts %}
         <div class="chart-container">
             <h3 class="chart-subtitle">{{ chart.title }}</h3>
@@ -96,7 +89,7 @@
     <!-- Ownership Chart -->
     {% if ownership_chart %}
     <div class="chart-section">
-        <h2 class="section-title">🏢 Cơ cấu Cổ đông</h2>
+        <h2 class="section-title">Cơ cấu Cổ đông</h2>
         <div class="chart-container">
             <img src="data:image/png;base64,{{ ownership_chart }}" alt="Cơ cấu cổ đông" class="chart-image">
         </div>
@@ -106,7 +99,7 @@
     <!-- Price History Table -->
     {% if price_history_html %}
     <div class="chart-section">
-        <h2 class="section-title">📅 Lịch sử Giao dịch (30 phiên gần nhất)</h2>
+        <h2 class="section-title">Lịch sử Giao dịch (30 phiên gần nhất)</h2>
         <div class="table-container">
             {{ price_history_html | safe }}
         </div>
@@ -116,7 +109,7 @@
     <!-- Leadership -->
     {% if company_info.officers %}
     <div class="chart-section">
-        <h2 class="section-title">👔 Ban Lãnh đạo</h2>
+        <h2 class="section-title">Ban Lãnh đạo</h2>
         <div class="officers-grid">
             {% for officer in company_info.officers %}
             <div class="officer-card">
@@ -131,7 +124,7 @@
     <!-- News -->
     {% if company_info.news %}
     <div class="chart-section">
-        <h2 class="section-title">📰 Tin tức mới nhất</h2>
+        <h2 class="section-title">Tin tức mới nhất</h2>
         <div class="news-list">
             {% for item in company_info.news %}
             <div class="news-item">
@@ -149,7 +142,7 @@
     <!-- Events -->
     {% if company_info.events %}
     <div class="chart-section">
-        <h2 class="section-title">📅 Sự kiện Doanh nghiệp</h2>
+        <h2 class="section-title">Sự kiện Doanh nghiệp</h2>
         <div class="news-list">
             {% for event in company_info.events %}
             <div class="news-item">

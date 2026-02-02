@@ -1,6 +1,6 @@
-flask
-pandas
-matplotlib
-seaborn
-numpy
-vnstock
+flask==3.1.2
+pandas==2.2.3
+matplotlib==3.10.1
+seaborn==0.13.2
+numpy==2.1.1
+vnstock==3.4.2

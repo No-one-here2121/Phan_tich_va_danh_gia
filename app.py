@@ -232,7 +232,7 @@ def analyze():
         # Prepare price history table
         price_history_html = None
         if not analyzer.price_history.empty:
-            df = analyzer.price_history.sort_index(ascending=False).head(30).copy()
+            df = analyzer.price_history.sort_index(ascending=False).head(365).copy()
             display_df = pd.DataFrame({
                 'Ngày': df.index.strftime('%d/%m/%Y'),
                 'Mở cửa': df['open'].apply(lambda x: f"{x:,.2f}"),
@@ -281,4 +281,4 @@ def analyze():
         return render_template('index.html', error=f'Lỗi khi phân tích {symbol}: {str(e)}')
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True)
