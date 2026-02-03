@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, make_response, Response
 import pandas as pd
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend
@@ -10,11 +10,56 @@ import base64
 from datetime import datetime, timedelta
 from demo_sp import BusinessAnalyzer
 import warnings
+import uuid
+import os
+from functools import wraps
+from models import db, User
 
 warnings.filterwarnings("ignore")
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-here'
+
+# Admin credentials - Sử dụng environment variables hoặc giá trị mặc định
+# Trong production, hãy set: ADMIN_USERNAME và ADMIN_PASSWORD trong environment
+ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
+ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'Admin@2026!')  # ⚠️ Đổi password trong production!
+
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db.init_app(app)
+
+# Create tables if they don't exist
+with app.app_context():
+    db.create_all()
+    print("✅ Database tables created successfully!")
+
+def check_auth(username, password):
+    """Kiểm tra username và password cho admin"""
+    return username == ADMIN_USERNAME and password == ADMIN_PASSWORD
+
+def authenticate():
+    """Yêu cầu người dùng đăng nhập"""
+    return Response(
+        '⛔ Truy cập bị từ chối! Vui lòng đăng nhập để xem trang này.',
+        401,
+        {'WWW-Authenticate': 'Basic realm="Admin Area - Login Required"'}
+    )
+
+def requires_auth(f):
+    """Decorator yêu cầu authentication cho route"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.authorization
+        if not auth or not check_auth(auth.username, auth.password):
+            return authenticate()
+        return f(*args, **kwargs)
+    return decorated
+
+def generate_uuid():
+    myuuid = uuid.uuid4()
+    return str(myuuid)
 
 def plot_to_base64(fig):
     """Convert matplotlib figure to base64 string"""
@@ -42,7 +87,7 @@ def generate_price_chart(analyzer):
     ax1.plot(df.index, df['SMA50'], label='SMA50', linestyle='--', color='#2ca02c', alpha=0.8, linewidth=1.2)
     ax1.plot(df.index, df['SMA200'], label='SMA200', linestyle='--', color='#d62728', alpha=0.7, linewidth=1.2)
     
-    ax1.set_title(f'LỊCH SỬ GIÁ {analyzer.symbol} - 1 NĂM GẦN NHẤT', fontsize=14, fontweight='bold')
+    ax1.set_title(f'Lịch sử giá {analyzer.symbol}', fontsize=14, fontweight='bold')
     ax1.set_ylabel('Giá (VNĐ)', fontsize=11)
     ax1.legend(loc='best', fontsize=9)
     ax1.grid(True, alpha=0.3, linestyle=':')
@@ -191,7 +236,20 @@ def generate_ownership_chart(analyzer):
 @app.route('/')
 def index():
     """Home page with search form"""
-    return render_template('index.html')
+    html_content = render_template('index.html')
+
+    resp = make_response(html_content)
+
+    if request.cookies.get('public_id') is None:
+        new_id = generate_uuid()
+        #age tinh theo giay
+        resp.set_cookie('public_id',new_id,max_age=60*60*24*30)
+        user = User(public_id=new_id)
+        db.session.add(user)
+        db.session.commit()
+
+    return resp
+
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
@@ -279,6 +337,39 @@ def analyze():
     
     except Exception as e:
         return render_template('index.html', error=f'Lỗi khi phân tích {symbol}: {str(e)}')
+
+# ============================================
+# ADMIN PANEL - BẢO MẬT
+# ============================================
+# URL khó đoán để tránh truy cập trái phép
+# Trong production, bạn nên thay đổi 'secret-panel-xyz2026' thành chuỗi ngẫu nhiên của riêng bạn
+@app.route('/secret-panel-xyz2026/users')
+@requires_auth  # ✅ YÊU CẦU ĐĂNG NHẬP
+def admin_users():
+    """Admin page to view all users in database"""
+    try:
+        users = User.query.order_by(User.created_at.desc()).all()
+        
+        # If requesting JSON
+        if request.args.get('format') == 'json':
+            return jsonify({
+                'total_users': len(users),
+                'users': [user.to_dict() for user in users]
+            })
+        
+        # Return HTML view
+        users_data = []
+        for user in users:
+            users_data.append({
+                'id': user.id,
+                'public_id': user.public_id,
+                'created_at': user.created_at.strftime('%d/%m/%Y %H:%M:%S') if user.created_at else 'N/A',
+                'last_seen': user.last_seen.strftime('%d/%m/%Y %H:%M:%S') if user.last_seen else 'N/A'
+            })
+        
+        return render_template('admin_users.html', users=users_data, total=len(users))
+    except Exception as e:
+        return f"Error: {str(e)}", 500
 
 if __name__ == '__main__':
     app.run(debug=True)

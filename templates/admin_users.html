@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Quản lý Users{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="admin-container">
+        <div class="admin-header">
+            <h1>👥 Quản lý Users</h1>
+            <a href="/" class="btn-back">← Về trang chủ</a>
+        </div>
+
+        <div class="stats-card">
+            <div class="stat-item">
+                <div class="stat-label">Tổng số Users</div>
+                <div class="stat-value">{{ total }}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Xem dạng JSON</div>
+                <a href="/admin/users?format=json" target="_blank" class="json-link">📄 JSON Format</a>
+            </div>
+        </div>
+
+        {% if users %}
+        <div class="table-container">
+            <table class="users-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Public ID (UUID)</th>
+                        <th>Ngày tạo</th>
+                        <th>Lần truy cập cuối</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td>{{ user.id }}</td>
+                        <td><code>{{ user.public_id }}</code></td>
+                        <td>{{ user.created_at }}</td>
+                        <td>{{ user.last_seen }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p>📭 Chưa có user nào trong hệ thống</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+    .admin-container {
+        max-width: 1200px;
+        margin: 2rem auto;
+        padding: 2rem;
+        background: white;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+    }
+
+    .admin-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid var(--border);
+    }
+
+    .admin-header h1 {
+        margin: 0;
+        color: var(--dark);
+    }
+
+    .stats-card {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .stat-item {
+        padding: 1.5rem;
+        background: var(--gray-light);
+        border-radius: 6px;
+    }
+
+    .stat-label {
+        font-size: 0.875rem;
+        color: var(--gray);
+        margin-bottom: 0.5rem;
+    }
+
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--primary);
+    }
+
+    .json-link {
+        display: inline-block;
+        padding: 0.5rem 1rem;
+        background: var(--primary);
+        color: white;
+        text-decoration: none;
+        border-radius: 4px;
+        font-size: 0.875rem;
+        margin-top: 0.5rem;
+    }
+
+    .json-link:hover {
+        background: #1d4ed8;
+    }
+
+    .users-table {
+        width: 100%;
+    }
+
+    .users-table code {
+        background: #f1f5f9;
+        padding: 0.25rem 0.5rem;
+        border-radius: 3px;
+        font-size: 0.875rem;
+        color: #0f172a;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: var(--gray);
+        font-size: 1.125rem;
+    }
+</style>
+{% endblock %}

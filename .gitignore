@@ -1,0 +1,40 @@
+# Ignore database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Ignore environment files
+.env
+.env.local
+.env.*.local
+
+# Ignore Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Ignore virtual environment
+venv/
+env/
+ENV/
+.venv
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore logs
+*.log
+
+# Ignore sensitive files
+secrets.txt
+credentials.txt
