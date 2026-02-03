@@ -13,7 +13,7 @@ import warnings
 import uuid
 import os
 from functools import wraps
-from models import db, User
+from models import db, User, History
 
 warnings.filterwarnings("ignore")
 
@@ -236,14 +236,28 @@ def generate_ownership_chart(analyzer):
 @app.route('/')
 def index():
     """Home page with search form"""
-    html_content = render_template('index.html')
+    # Lấy user_id từ cookie
+    user_id = request.cookies.get('public_id')
+    
+    # Lấy lịch sử tìm kiếm (10 tìm kiếm gần nhất)
+    search_history = []
+    if user_id:
+        history_records = History.query\
+            .filter_by(user_id=user_id)\
+            .order_by(History.history_id.desc())\
+            .limit(10)\
+            .all()
+        search_history = [record.symbol for record in history_records]
+    
+    html_content = render_template('index.html', search_history=search_history)
 
     resp = make_response(html_content)
 
-    if request.cookies.get('public_id') is None:
+    # Tạo user mới nếu chưa có cookie
+    if user_id is None:
         new_id = generate_uuid()
-        #age tinh theo giay
-        resp.set_cookie('public_id',new_id,max_age=60*60*24*30)
+        # age tính theo giây (30 ngày)
+        resp.set_cookie('public_id', new_id, max_age=60*60*24*30)
         user = User(public_id=new_id)
         db.session.add(user)
         db.session.commit()
@@ -251,15 +265,28 @@ def index():
     return resp
 
 
-@app.route('/analyze', methods=['POST'])
+@app.route('/analyze', methods=['GET', 'POST'])
 def analyze():
     """Analyze stock and show results"""
-    symbol = request.form.get('symbol', '').strip().upper()
+    # Lấy symbol từ POST form hoặc GET query
+    if request.method == 'POST':
+        symbol = request.form.get('symbol', '').strip().upper()
+    else:  # GET request từ history link
+        symbol = request.args.get('symbol', '').strip().upper()
     
     if not symbol:
         return render_template('index.html', error='Vui lòng nhập mã cổ phiếu')
     
     try:
+        # Lấy user_id từ cookie
+        user_id = request.cookies.get('public_id')
+        
+        # Lưu lịch sử tìm kiếm
+        if user_id:
+            history = History(user_id=user_id, symbol=symbol)
+            db.session.add(history)
+            db.session.commit()
+        
         # Create analyzer
         analyzer = BusinessAnalyzer(symbol)
         
@@ -338,13 +365,10 @@ def analyze():
     except Exception as e:
         return render_template('index.html', error=f'Lỗi khi phân tích {symbol}: {str(e)}')
 
-# ============================================
-# ADMIN PANEL - BẢO MẬT
-# ============================================
-# URL khó đoán để tránh truy cập trái phép
-# Trong production, bạn nên thay đổi 'secret-panel-xyz2026' thành chuỗi ngẫu nhiên của riêng bạn
-@app.route('/secret-panel-xyz2026/users')
-@requires_auth  # ✅ YÊU CẦU ĐĂNG NHẬP
+
+# ADMIN PANEL
+@app.route('/019c23fd-5893-7e1f-bc81-36988ed2e722/users')
+@requires_auth  #YÊU CẦU ĐĂNG NHẬP
 def admin_users():
     """Admin page to view all users in database"""
     try:

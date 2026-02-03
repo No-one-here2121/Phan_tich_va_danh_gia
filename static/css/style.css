@@ -148,6 +148,42 @@ body {
     font-size: 0.9rem;
 }
 
+/* Search History */
+.history-section {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+}
+
+.history-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--dark);
+    margin-bottom: 0.75rem;
+}
+
+.history-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.history-tag {
+    padding: 0.5rem 1rem;
+    background: var(--gray-light);
+    color: var(--dark);
+    border-radius: 4px;
+    font-size: 0.875rem;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.history-tag:hover {
+    background: var(--primary);
+    color: var(--white);
+    transform: translateY(-2px);
+}
+
 /* Features */
 .features-grid {
     display: none;

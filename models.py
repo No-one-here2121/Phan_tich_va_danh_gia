@@ -22,3 +22,22 @@ class User(db.Model):
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None,
             'last_seen': self.last_seen.strftime('%Y-%m-%d %H:%M:%S') if self.last_seen else None
         }
+
+class History(db.Model):
+    __tablename__ = 'history'
+    
+    history_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.String(36), nullable=False)
+    symbol = db.Column(db.String(10), nullable=False)
+    
+    def __repr__(self):
+        return f'<History {self.symbol} by {self.user_id}>'
+    
+    def to_dict(self):
+        """Convert history object to dictionary"""
+        return {
+            'id': self.history_id,
+            'user_id': self.user_id,
+            'symbol': self.symbol
+        }
+    

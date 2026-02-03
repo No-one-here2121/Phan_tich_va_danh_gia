@@ -21,6 +21,17 @@
                 {% if error %}
                 <div class="error-message">{{ error }}</div>
                 {% endif %}
+
+                {% if search_history %}
+                <div class="history-section">
+                    <h3 class="history-title">Lịch sử tìm kiếm</h3>
+                    <div class="history-tags">
+                        {% for symbol in search_history %}
+                        <a href="/analyze?symbol={{ symbol }}" class="history-tag">{{ symbol }}</a>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
