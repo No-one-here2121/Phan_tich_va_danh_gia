@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+
+{% block title %}Các Khuyến nghị Giao dịch{% endblock %}
+
+{% block content %}
+<div class="container results-container">
+    <!-- Header -->
+    <div class="company-header">
+        <div class="back-button">
+            <a href="/" class="btn-back">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                Quay lại
+            </a>
+        </div>
+        <div class="company-title-section">
+            <h1 class="company-symbol">💡 Khuyến nghị Giao dịch</h1>
+            <h2 class="company-name">Danh sách các khuyến nghị được tạo từ tín hiệu kỹ thuật</h2>
+        </div>
+    </div>
+
+    <!-- Active Recommendations -->
+    <div class="chart-section">
+        <h2 class="section-title">🔴 Khuyến nghị Hoạt động</h2>
+        
+        {% if active_recommendations %}
+        <div class="recommendations-grid">
+            {% for rec in active_recommendations %}
+            <div class="recommendation-card active-card">
+                <div class="rec-header">
+                    <div class="rec-symbol">{{ rec.symbol }}</div>
+                    <span class="action-badge {% if rec.action == 'BUY' %}badge-buy{% elif rec.action == 'SELL' %}badge-sell{% else %}badge-hold{% endif %}">
+                        {{ rec.action }}
+                    </span>
+                </div>
+                
+                <div class="rec-company">{{ rec.company_name }}</div>
+                
+                <div class="rec-confidence">
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" style="width: {{ rec.confidence_score }}%;"></div>
+                    </div>
+                    <span class="confidence-text">Độ tin cậy: {{ "{:.0f}%".format(rec.confidence_score) }}</span>
+                </div>
+                
+                <div class="rec-details">
+                    {% if rec.reason %}
+                    <div class="detail-row">
+                        <span class="detail-label">Lý do:</span>
+                        <span class="detail-value">{{ rec.reason }}</span>
+                    </div>
+                    {% endif %}
+                    
+                    {% if rec.entry_price %}
+                    <div class="detail-row">
+                        <span class="detail-label">Giá vào:</span>
+                        <span class="detail-value">{{ "{:,.0f}".format(rec.entry_price) }} VNĐ</span>
+                    </div>
+                    {% endif %}
+                    
+                    {% if rec.target_price %}
+                    <div class="detail-row">
+                        <span class="detail-label">Mục tiêu:</span>
+                        <span class="detail-value target-price">{{ "{:,.0f}".format(rec.target_price) }} VNĐ</span>
+                    </div>
+                    {% endif %}
+                    
+                    {% if rec.stop_loss %}
+                    <div class="detail-row">
+                        <span class="detail-label">Stop Loss:</span>
+                        <span class="detail-value stop-loss">{{ "{:,.0f}".format(rec.stop_loss) }} VNĐ</span>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="rec-date">{{ rec.created_at.strftime('%d/%m/%Y %H:%M') }}</div>
+                
+                <div class="rec-actions">
+                    <form method="POST" action="/update-recommendation/{{ rec.id }}/completed" style="display: inline;">
+                        <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Xác nhận khuyến nghị đã hoàn thành?');">
+                            ✓ Hoàn thành
+                        </button>
+                    </form>
+                    <form method="POST" action="/update-recommendation/{{ rec.id }}/cancelled" style="display: inline;">
+                        <button type="submit" class="btn btn-sm btn-warning" onclick="return confirm('Xác nhận hủy khuyến nghị?');">
+                            ✗ Hủy
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            <strong>ℹ️ Chưa có khuyến nghị</strong> - Hãy phân tích một cổ phiếu để nhận khuyến nghị
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Completed Recommendations -->
+    {% if completed_recommendations %}
+    <div class="chart-section">
+        <h2 class="section-title">✅ Khuyến nghị Hoàn thành</h2>
+        
+        <div class="recommendations-grid">
+            {% for rec in completed_recommendations %}
+            <div class="recommendation-card completed-card">
+                <div class="rec-header">
+                    <div class="rec-symbol">{{ rec.symbol }}</div>
+                    <span class="action-badge {% if rec.action == 'BUY' %}badge-buy{% elif rec.action == 'SELL' %}badge-sell{% else %}badge-hold{% endif %}">
+                        {{ rec.action }}
+                    </span>
+                </div>
+                
+                <div class="rec-company">{{ rec.company_name }}</div>
+                
+                <div class="rec-details">
+                    {% if rec.entry_price %}
+                    <div class="detail-row">
+                        <span class="detail-label">Giá vào:</span>
+                        <span class="detail-value">{{ "{:,.0f}".format(rec.entry_price) }} VNĐ</span>
+                    </div>
+                    {% endif %}
+                    
+                    {% if rec.target_price %}
+                    <div class="detail-row">
+                        <span class="detail-label">Mục tiêu:</span>
+                        <span class="detail-value target-price">{{ "{:,.0f}".format(rec.target_price) }} VNĐ</span>
+                    </div>
+                    {% endif %}
+                    
+                    {% if rec.realized_price %}
+                    <div class="detail-row">
+                        <span class="detail-label">Giá thực tế:</span>
+                        <span class="detail-value">{{ "{:,.0f}".format(rec.realized_price) }} VNĐ</span>
+                    </div>
+                    
+                    {% if rec.pnl %}
+                    <div class="detail-row">
+                        <span class="detail-label">P&L:</span>
+                        <span class="detail-value {% if rec.pnl >= 0 %}positive{% else %}negative{% endif %}">
+                            {{ "{:+,.0f}".format(rec.pnl) }} VNĐ ({{ "{:+.2f}%".format(rec.pnl_percentage) }})
+                        </span>
+                    </div>
+                    {% endif %}
+                    {% endif %}
+                </div>
+                
+                <div class="rec-date">{{ rec.created_at.strftime('%d/%m/%Y') }} → {{ rec.updated_at.strftime('%d/%m/%Y') }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.recommendations-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.recommendation-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    border: 2px solid var(--border);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.recommendation-card:hover {
+    box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+    transform: translateY(-3px);
+}
+
+.recommendation-card.completed-card {
+    opacity: 0.8;
+    background-color: #f9fafb;
+}
+
+.rec-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--border);
+}
+
+.rec-symbol {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--dark);
+}
+
+.action-badge {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+}
+
+.badge-buy {
+    background-color: rgba(16, 185, 129, 0.2);
+    color: #059669;
+}
+
+.badge-sell {
+    background-color: rgba(239, 68, 68, 0.2);
+    color: #dc2626;
+}
+
+.badge-hold {
+    background-color: rgba(245, 158, 11, 0.2);
+    color: #d97706;
+}
+
+.rec-company {
+    font-size: 14px;
+    color: var(--gray);
+    margin-bottom: 12px;
+}
+
+.rec-confidence {
+    margin-bottom: 15px;
+}
+
+.confidence-bar {
+    width: 100%;
+    height: 24px;
+    background-color: var(--gray-light);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.confidence-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%);
+}
+
+.confidence-text {
+    font-size: 12px;
+    color: var(--gray);
+    font-weight: 500;
+}
+
+.rec-details {
+    margin: 15px 0;
+    flex-grow: 1;
+}
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--gray-light);
+    font-size: 13px;
+}
+
+.detail-row:last-child {
+    border-bottom: none;
+}
+
+.detail-label {
+    color: var(--gray);
+    font-weight: 500;
+}
+
+.detail-value {
+    font-weight: 600;
+    color: var(--dark);
+    text-align: right;
+}
+
+.detail-value.target-price {
+    color: #10b981;
+}
+
+.detail-value.stop-loss {
+    color: #ef4444;
+}
+
+.detail-value.positive {
+    color: #10b981;
+}
+
+.detail-value.negative {
+    color: #ef4444;
+}
+
+.rec-date {
+    font-size: 12px;
+    color: var(--gray);
+    margin: 12px 0;
+    padding: 8px 0;
+    border-top: 1px solid var(--gray-light);
+}
+
+.rec-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: auto;
+}
+
+.btn {
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 12px;
+    transition: all 0.3s ease;
+}
+
+.btn-sm {
+    flex: 1;
+}
+
+.btn-success {
+    background-color: #10b981;
+    color: white;
+}
+
+.btn-success:hover {
+    background-color: #059669;
+}
+
+.btn-warning {
+    background-color: #f59e0b;
+    color: white;
+}
+
+.btn-warning:hover {
+    background-color: #d97706;
+}
+
+.alert {
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
+.alert-info {
+    background-color: rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.3);
+    color: #2563eb;
+}
+</style>
+{% endblock %}

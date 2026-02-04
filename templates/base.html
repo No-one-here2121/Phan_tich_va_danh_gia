@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
+
 <body>
     <nav class="navbar">
         <div class="container">
@@ -14,10 +16,30 @@
                 <h1>📊 Stock Analyzer</h1>
             </div>
             <div class="nav-links">
-                <a href="/" class="nav-link">Trang chủ</a>
+                <a href="{{ url_for('index') }}" class="nav-link">Trang chủ</a>
+                {% if username %}
+                <div class="user-panel" style="display: inline-block; margin-left: 20px;">
+                    <span style="color: #fff; margin-right: 10px;">Xin chào, <strong>{{ username }}</strong>!</span>
+                    <a href="{{ url_for('logout') }}" class="nav-link" style="color: #ff6b6b; font-weight: 500;">Đăng
+                        xuất</a>
+                </div>
+                {% endif %}
             </div>
         </div>
     </nav>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-container">
+            <div class="loading-spinner"></div>
+            <div class="loading-text" id="loadingText">Đang tải dữ liệu...</div>
+            <div class="loading-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <main class="main-content">
         {% block content %}{% endblock %}
@@ -28,5 +50,76 @@
             <p>&copy; 2026 Stock Analysis Tool | Nguồn dữ liệu: VCI</p>
         </div>
     </footer>
+
+    <script>
+        // Loading animation management
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const loadingText = document.getElementById('loadingText');
+        const progressFill = document.getElementById('progressFill');
+
+        const loadingMessages = [
+            'Đang kết nối đến máy chủ...',
+            'Đang tải thông tin công ty...',
+            'Đang lấy dữ liệu lịch sử giá...',
+            'Đang tính toán các chỉ số tài chính...',
+            'Đang phân tích theo ngành...',
+            'Đang tạo biểu đồ...',
+            'Hoàn tất! Đang hiển thị kết quả...'
+        ];
+
+        let messageIndex = 0;
+        let progressInterval;
+        let messageInterval;
+
+        function showLoading() {
+            loadingOverlay.classList.add('active');
+            messageIndex = 0;
+            let progress = 0;
+
+            // Update progress bar
+            progressInterval = setInterval(() => {
+                progress += Math.random() * 15;
+                if (progress > 95) progress = 95;
+                progressFill.style.width = progress + '%';
+            }, 800);
+
+            // Cycle through messages
+            messageInterval = setInterval(() => {
+                messageIndex = (messageIndex + 1) % loadingMessages.length;
+                loadingText.textContent = loadingMessages[messageIndex];
+            }, 2000);
+        }
+
+        function hideLoading() {
+            clearInterval(progressInterval);
+            clearInterval(messageInterval);
+            progressFill.style.width = '100%';
+            loadingText.textContent = 'Hoàn tất!';
+
+            setTimeout(() => {
+                loadingOverlay.classList.remove('active');
+                progressFill.style.width = '0%';
+            }, 500);
+        }
+
+        // Attach to all forms that should show loading
+        document.addEventListener('DOMContentLoaded', function () {
+            const forms = document.querySelectorAll('form[action*="analyze"]');
+            forms.forEach(form => {
+                form.addEventListener('submit', function (e) {
+                    const symbol = form.querySelector('input[name="symbol"]');
+                    if (symbol && symbol.value.trim()) {
+                        showLoading();
+                    }
+                });
+            });
+        });
+
+        // Hide loading when page loads (in case of back button or error)
+        window.addEventListener('load', function () {
+            hideLoading();
+        });
+    </script>
 </body>
+
 </html>

@@ -1,6 +1,10 @@
 flask
+flask-mysqldb
+mysqlclient
 pandas
 matplotlib
 seaborn
 numpy
 vnstock
+statsmodels
+Werkzeug

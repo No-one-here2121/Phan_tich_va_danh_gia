@@ -1,0 +1,312 @@
+{% extends "base.html" %}
+
+{% block title %}Danh sách Theo dõi{% endblock %}
+
+{% block content %}
+<div class="container results-container">
+    <!-- Header -->
+    <div class="company-header">
+        <div class="back-button">
+            <a href="/" class="btn-back">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                Quay lại
+            </a>
+        </div>
+        <div class="company-title-section">
+            <h1 class="company-symbol">⭐ Danh sách Theo dõi</h1>
+            <h2 class="company-name">Các cổ phiếu bạn đang theo dõi</h2>
+        </div>
+    </div>
+
+    <!-- Watchlist Items -->
+    <div class="chart-section">
+        {% if watchlist %}
+        <div class="watchlist-grid">
+            {% for item in watchlist %}
+            <div class="watchlist-card">
+                <div class="card-header">
+                    <div class="stock-symbol">{{ item.symbol }}</div>
+                    <form method="POST" action="/remove-watchlist/{{ item.id }}" style="display: inline;">
+                        <button type="submit" class="btn-remove" title="Xóa khỏi danh sách">
+                            <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M6 18L18 6M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                    </form>
+                </div>
+                
+                <div class="stock-name">{{ item.company_name }}</div>
+                
+                {% if item.notes %}
+                <div class="stock-notes">
+                    <strong>Ghi chú:</strong> {{ item.notes }}
+                </div>
+                {% endif %}
+                
+                <div class="stock-date">Thêm vào: {{ item.added_at.strftime('%d/%m/%Y') }}</div>
+                
+                <div class="card-actions">
+                    <a href="/analyze?symbol={{ item.symbol }}" class="btn btn-analyze">
+                        📊 Phân tích
+                    </a>
+                    <a href="/signals/{{ item.symbol }}" class="btn btn-signals">
+                        📈 Tín hiệu
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-icon">⭐</div>
+            <h3>Danh sách trống</h3>
+            <p>Bạn chưa thêm cổ phiếu nào vào danh sách theo dõi</p>
+            <a href="/" class="btn btn-primary">
+                🔍 Tìm kiếm cổ phiếu
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Tips Section -->
+    <div class="chart-section info-section">
+        <h2 class="section-title">💡 Mẹo sử dụng Danh sách theo dõi</h2>
+        <div class="tips-grid">
+            <div class="tip-card">
+                <div class="tip-icon">➕</div>
+                <div class="tip-title">Thêm cổ phiếu</div>
+                <div class="tip-text">Khi phân tích cổ phiếu, nhấp nút "Thêm vào danh sách theo dõi"</div>
+            </div>
+            <div class="tip-card">
+                <div class="tip-icon">🔄</div>
+                <div class="tip-title">Theo dõi thay đổi</div>
+                <div class="tip-text">Kiểm tra tín hiệu giao dịch hàng ngày từ danh sách</div>
+            </div>
+            <div class="tip-card">
+                <div class="tip-icon">📊</div>
+                <div class="tip-title">Phân tích chi tiết</div>
+                <div class="tip-text">Xem lịch sử tín hiệu và các khuyến nghị trước đó</div>
+            </div>
+            <div class="tip-card">
+                <div class="tip-icon">⚙️</div>
+                <div class="tip-title">Quản lý danh sách</div>
+                <div class="tip-text">Xóa cổ phiếu bất kỳ lúc nào khi không còn quan tâm</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.watchlist-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.watchlist-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    border: 2px solid var(--border);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.watchlist-card:hover {
+    box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+    transform: translateY(-3px);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 15px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--border);
+}
+
+.stock-symbol {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.btn-remove {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--gray);
+    transition: color 0.3s ease;
+    padding: 0;
+    display: flex;
+    align-items: center;
+}
+
+.btn-remove:hover {
+    color: var(--danger);
+}
+
+.stock-name {
+    font-size: 14px;
+    color: var(--gray);
+    margin-bottom: 10px;
+    font-weight: 500;
+}
+
+.stock-notes {
+    font-size: 13px;
+    color: var(--dark-light);
+    background-color: var(--gray-light);
+    padding: 10px;
+    border-radius: 6px;
+    margin: 10px 0;
+    border-left: 3px solid var(--primary);
+}
+
+.stock-date {
+    font-size: 12px;
+    color: var(--gray);
+    margin: 12px 0;
+    padding: 8px 0;
+    border-top: 1px solid var(--gray-light);
+}
+
+.card-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: auto;
+    padding-top: 12px;
+}
+
+.btn {
+    flex: 1;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 13px;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.btn-analyze {
+    background-color: rgba(59, 130, 246, 0.1);
+    color: #2563eb;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.btn-analyze:hover {
+    background-color: #2563eb;
+    color: white;
+}
+
+.btn-signals {
+    background-color: rgba(139, 92, 246, 0.1);
+    color: #7c3aed;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.btn-signals:hover {
+    background-color: #7c3aed;
+    color: white;
+}
+
+.btn-primary {
+    background-color: var(--primary);
+    color: white;
+    padding: 12px 24px;
+    width: auto;
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-dark);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.5) 0%, rgba(248,250,252,0.5) 100%);
+    border-radius: 12px;
+    border: 2px dashed var(--border);
+}
+
+.empty-icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+}
+
+.empty-state h3 {
+    font-size: 24px;
+    color: var(--dark);
+    margin-bottom: 10px;
+}
+
+.empty-state p {
+    font-size: 16px;
+    color: var(--gray);
+    margin-bottom: 20px;
+}
+
+.tips-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.tip-card {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    border: 2px solid var(--border);
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.tip-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow);
+}
+
+.tip-icon {
+    font-size: 32px;
+    margin-bottom: 10px;
+}
+
+.tip-title {
+    font-weight: 600;
+    color: var(--dark);
+    margin-bottom: 8px;
+}
+
+.tip-text {
+    font-size: 13px;
+    color: var(--gray);
+    line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+    .watchlist-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .tips-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}

@@ -64,7 +64,7 @@ class SeasonalNaNHandler:
             temp_filled = filled_series.interpolate(method='linear', limit_direction='both')
             
             # Nếu vẫn còn NaN (ở đầu/cuối), dùng forward/backward fill
-            temp_filled = temp_filled.fillna(method='ffill').fillna(method='bfill')
+            temp_filled = temp_filled.ffill().bfill()
             
             # Bước 2: Áp dụng seasonal decomposition
             decomposition = seasonal_decompose(
@@ -103,10 +103,10 @@ class SeasonalNaNHandler:
         filled = filled.interpolate(method='linear', limit_direction='both')
         
         # Bước 2: Forward fill cho các giá trị đầu
-        filled = filled.fillna(method='ffill')
+        filled = filled.ffill()
         
         # Bước 3: Backward fill cho các giá trị cuối
-        filled = filled.fillna(method='bfill')
+        filled = filled.bfill()
         
         # Bước 4: Nếu vẫn còn NaN, dùng mean
         if filled.isna().any():
