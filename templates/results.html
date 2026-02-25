@@ -1,0 +1,656 @@
+{% extends "base.html" %}
+
+{% block title %}{{ company_info.symbol }} - Phân tích Cổ phiếu{% endblock %}
+
+{% block content %}
+<div class="container results-container">
+    <!-- Company Header -->
+    <div class="company-header">
+        <div class="back-button">
+            <a href="/" class="btn-back">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                Quay lại
+            </a>
+        </div>
+        <div class="company-title-section">
+            <h1 class="company-symbol">{{ company_info.symbol }}</h1>
+            <h2 class="company-name">{{ company_info.name }}</h2>
+            <div class="company-meta">
+                <span class="meta-tag">{{ company_info.industry }}</span>
+                {% if company_info.industry2 %}
+                <span class="meta-tag">{{ company_info.industry2 }}</span>
+                {% endif %}
+                <span class="meta-tag">{{ company_info.exchange }}</span>
+            </div>
+        </div>
+        <div class="price-box">
+            <div class="current-price">{{ "{:,.0f}".format(company_info.price) }} VNĐ</div>
+            <div class="price-change {% if company_info.pct_change >= 0 %}positive{% else %}negative{% endif %}">
+                {{ "{:+.2f}".format(company_info.pct_change * 100) }}%
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="action-buttons">
+        <form method="POST" action="/add-to-watchlist" style="display: inline;">
+            <input type="hidden" name="symbol" value="{{ company_info.symbol }}">
+            <input type="hidden" name="company_name" value="{{ company_info.name }}">
+            <button type="submit" class="btn btn-watchlist" title="Thêm vào danh sách theo dõi">
+                ⭐ Theo dõi
+            </button>
+        </form>
+        <a href="/signals/{{ company_info.symbol }}" class="btn btn-history" title="Xem lịch sử tín hiệu">
+            📈 Lịch sử Tín hiệu
+        </a>
+        <a href="/recommendations" class="btn btn-recommendations" title="Xem tất cả khuyến nghị">
+            💡 Khuyến nghị
+        </a>
+    </div>
+
+    <!-- Company Info Cards -->
+    <div class="info-cards-grid">
+        <div class="info-card">
+            <div class="info-label">Vốn hóa</div>
+            <div class="info-value">{{ company_info.market_cap }}</div>
+        </div>
+        {% if company_info.employees > 0 %}
+        <div class="info-card">
+            <div class="info-label">Nhân viên</div>
+            <div class="info-value">{{ "{:,}".format(company_info.employees) }}</div>
+        </div>
+        {% endif %}
+        {% if company_info.shareholders_count > 0 %}
+        <div class="info-card">
+            <div class="info-label">Cổ đông</div>
+            <div class="info-value">{{ "{:,}".format(company_info.shareholders_count) }}</div>
+        </div>
+        {% endif %}
+        {% if company_info.established_year %}
+        <div class="info-card">
+            <div class="info-label">Thành lập</div>
+            <div class="info-value">{{ company_info.established_year }}</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Price Chart -->
+    {% if price_chart %}
+    <div class="chart-section">
+        <h2 class="section-title">📈 Biểu đồ Giá Lịch sử</h2>
+        <div class="chart-container">
+            <img src="data:image/png;base64,{{ price_chart }}" alt="Biểu đồ giá" class="chart-image">
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Trading Signals -->
+    {% if trading_signals %}
+    <div class="chart-section trading-signals-section">
+        <h2 class="section-title">🎯 Tín hiệu Giao dịch & Khuyến nghị</h2>
+
+        <!-- Main Signal -->
+        <div class="signal-header">
+            <div
+                class="signal-recommendation {% if trading_signals.final_signal == 'BUY' %}signal-buy{% elif trading_signals.final_signal == 'SELL' %}signal-sell{% else %}signal-hold{% endif %}">
+                <div class="signal-text">{{ trading_signals.final_signal }}</div>
+                <div class="signal-confidence">Độ tin cậy: {{ "{:.0%}".format(trading_signals.final_confidence) }}</div>
+            </div>
+            <div class="signal-timestamp">{{ trading_signals.timestamp }}</div>
+        </div>
+
+        <!-- Technical Indicators Grid -->
+        <div class="indicators-grid">
+            <!-- SMA Crossover -->
+            <div class="indicator-card">
+                <div class="indicator-header">
+                    <h3>📊 Chiến lược SMA</h3>
+                    <span
+                        class="signal-badge {% if trading_signals.sma.signal == 'BUY' %}badge-buy{% elif trading_signals.sma.signal == 'SELL' %}badge-sell{% else %}badge-hold{% endif %}">
+                        {{ trading_signals.sma.signal }}
+                    </span>
+                </div>
+                <div class="indicator-content">
+                    <p class="confidence">Độ tin cậy: <strong>{{ "{:.0%}".format(trading_signals.sma.confidence)
+                            }}</strong></p>
+                    <div class="indicator-details">
+                        <div class="detail-row">
+                            <span class="detail-label">Giá hiện tại:</span>
+                            <span class="detail-value">{{ "{:,.2f}".format(trading_signals.sma.price) }}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">SMA 20:</span>
+                            <span class="detail-value">{{ "{:,.2f}".format(trading_signals.sma.sma20) }}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">SMA 50:</span>
+                            <span class="detail-value">{{ "{:,.2f}".format(trading_signals.sma.sma50) }}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">SMA 200:</span>
+                            <span class="detail-value">{{ "{:,.2f}".format(trading_signals.sma.sma200) }}</span>
+                        </div>
+                    </div>
+                    <div class="reason-box">
+                        {% for reason in trading_signals.sma.reason %}
+                        <div class="reason-item">✓ {{ reason }}</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- RSI -->
+            <div class="indicator-card">
+                <div class="indicator-header">
+                    <h3>📈 RSI (14)</h3>
+                    <span
+                        class="signal-badge {% if trading_signals.rsi.signal == 'BUY' %}badge-buy{% elif trading_signals.rsi.signal == 'SELL' %}badge-sell{% else %}badge-hold{% endif %}">
+                        {{ trading_signals.rsi.signal }}
+                    </span>
+                </div>
+                <div class="indicator-content">
+                    <p class="confidence">Độ tin cậy: <strong>{{ "{:.0%}".format(trading_signals.rsi.confidence)
+                            }}</strong></p>
+                    <div class="rsi-bar">
+                        <div class="rsi-scale">
+                            <div class="rsi-zone oversold">Quá bán<br>(< 30)</div>
+                                    <div class="rsi-zone neutral">Trung lập<br>(30-70)</div>
+                                    <div class="rsi-zone overbought">Quá mua<br>(> 70)</div>
+                            </div>
+                            <div class="rsi-pointer" style="left: {{ trading_signals.rsi.rsi }}%;">
+                                <span class="rsi-value">{{ "{:.1f}".format(trading_signals.rsi.rsi) }}</span>
+                            </div>
+                        </div>
+                        <div class="reason-box">
+                            {% for reason in trading_signals.rsi.reason %}
+                            <div class="reason-item">✓ {{ reason }}</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MACD -->
+                <div class="indicator-card">
+                    <div class="indicator-header">
+                        <h3>🔄 MACD</h3>
+                        <span
+                            class="signal-badge {% if trading_signals.macd.signal == 'BUY' %}badge-buy{% elif trading_signals.macd.signal == 'SELL' %}badge-sell{% else %}badge-hold{% endif %}">
+                            {{ trading_signals.macd.signal }}
+                        </span>
+                    </div>
+                    <div class="indicator-content">
+                        <p class="confidence">Độ tin cậy: <strong>{{ "{:.0%}".format(trading_signals.macd.confidence)
+                                }}</strong></p>
+                        <div class="indicator-details">
+                            <div class="detail-row">
+                                <span class="detail-label">MACD:</span>
+                                <span
+                                    class="detail-value {% if trading_signals.macd.macd > 0 %}positive{% else %}negative{% endif %}">{{
+                                    "{:+.4f}".format(trading_signals.macd.macd) }}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Signal:</span>
+                                <span class="detail-value">{{ "{:+.4f}".format(trading_signals.macd.signal_line)
+                                    }}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Histogram:</span>
+                                <span
+                                    class="detail-value {% if trading_signals.macd.histogram > 0 %}positive{% else %}negative{% endif %}">{{
+                                    "{:+.4f}".format(trading_signals.macd.histogram) }}</span>
+                            </div>
+                        </div>
+                        <div class="reason-box">
+                            {% for reason in trading_signals.macd.reason %}
+                            <div class="reason-item">✓ {{ reason }}</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bollinger Bands -->
+                <div class="indicator-card">
+                    <div class="indicator-header">
+                        <h3>📌 Bollinger Bands</h3>
+                        <span
+                            class="signal-badge {% if trading_signals.bollinger_bands.signal == 'BUY' %}badge-buy{% elif trading_signals.bollinger_bands.signal == 'SELL' %}badge-sell{% else %}badge-hold{% endif %}">
+                            {{ trading_signals.bollinger_bands.signal }}
+                        </span>
+                    </div>
+                    <div class="indicator-content">
+                        <p class="confidence">Độ tin cậy: <strong>{{
+                                "{:.0%}".format(trading_signals.bollinger_bands.confidence) }}</strong></p>
+                        <div class="indicator-details">
+                            <div class="detail-row">
+                                <span class="detail-label">Giá:</span>
+                                <span class="detail-value">{{ "{:,.2f}".format(trading_signals.bollinger_bands.price)
+                                    }}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Upper Band:</span>
+                                <span class="detail-value">{{
+                                    "{:,.2f}".format(trading_signals.bollinger_bands.upper_band) }}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Middle Band:</span>
+                                <span class="detail-value">{{
+                                    "{:,.2f}".format(trading_signals.bollinger_bands.middle_band) }}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Lower Band:</span>
+                                <span class="detail-value">{{
+                                    "{:,.2f}".format(trading_signals.bollinger_bands.lower_band) }}</span>
+                            </div>
+                        </div>
+                        <div class="reason-box">
+                            {% for reason in trading_signals.bollinger_bands.reason %}
+                            <div class="reason-item">✓ {{ reason }}</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Volume -->
+                <div class="indicator-card">
+                    <div class="indicator-header">
+                        <h3>📊 Khối lượng Giao dịch</h3>
+                        <span class="signal-badge">{{ "{:.2f}x".format(trading_signals.volume.volume_ratio) }}</span>
+                    </div>
+                    <div class="indicator-content">
+                        <p class="volume-description">Khối lượng trung bình (20 ngày)</p>
+                        <div class="volume-bar">
+                            <div class="volume-fill"
+                                style="width: {{ min(trading_signals.volume.volume_ratio * 33.33, 100) }}%;"></div>
+                        </div>
+                        <div class="reason-box">
+                            {% for reason in trading_signals.volume.reason %}
+                            <div class="reason-item">✓ {{ reason }}</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary -->
+                <div class="indicator-card summary-card">
+                    <div class="indicator-header">
+                        <h3>📋 Tóm tắt Tín hiệu</h3>
+                    </div>
+                    <div class="indicator-content">
+                        <div class="summary-stat">
+                            <span class="stat-label">Tổng số tín hiệu:</span>
+                            <span class="stat-value">{{ trading_signals.signals_count }}/4</span>
+                        </div>
+                        <div class="summary-stat">
+                            <span class="stat-label">Khuyến nghị:</span>
+                            <span
+                                class="stat-value {% if trading_signals.final_signal == 'BUY' %}buy-color{% elif trading_signals.final_signal == 'SELL' %}sell-color{% else %}hold-color{% endif %}">
+                                {{ trading_signals.final_signal }}
+                            </span>
+                        </div>
+                        <div class="summary-note">
+                            <p class="note-text"><strong>⚠️ Lưu ý:</strong> Những tín hiệu này là kỹ thuật phân tích dựa
+                                trên dữ liệu lịch sử.
+                                Không phải là lời khuyên đầu tư. Luôn thực hiện nghiên cứu kỹ lưỡng trước khi đưa ra
+                                quyết định giao dịch.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Trading Chart -->
+            {% if trading_chart %}
+            <div class="chart-container" style="margin-top: 30px;">
+                <h3 class="chart-subtitle">Biểu đồ Tín hiệu Giao dịch (RSI, MACD, Bollinger Bands)</h3>
+                <img src="data:image/png;base64,{{ trading_chart }}" alt="Biểu đồ tín hiệu giao dịch"
+                    class="chart-image">
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if metrics_html %}
+        <div class="chart-section">
+            <h2 class="section-title">💰 Chỉ số Tài chính (8 Quý gần nhất)</h2>
+            <div class="table-container">
+                {{ metrics_html | safe }}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Industry Charts -->
+        {% if industry_charts %}
+        <div class="chart-section">
+            <h2 class="section-title">📊 Phân tích Chuyên sâu theo Ngành</h2>
+            {% for chart in industry_charts %}
+            <div class="chart-container">
+                <h3 class="chart-subtitle">{{ chart.title }}</h3>
+                <img src="data:image/png;base64,{{ chart.image }}" alt="{{ chart.title }}" class="chart-image">
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Ownership Chart -->
+        {% if ownership_chart %}
+        <div class="chart-section">
+            <h2 class="section-title">🏢 Cơ cấu Cổ đông</h2>
+            <div class="chart-container">
+                <img src="data:image/png;base64,{{ ownership_chart }}" alt="Cơ cấu cổ đông" class="chart-image">
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Price History Table -->
+        {% if price_history_html %}
+        <div class="chart-section">
+            <h2 class="section-title">📅 Lịch sử Giao dịch (30 phiên gần nhất)</h2>
+            <div class="table-container">
+                {{ price_history_html | safe }}
+            </div>
+        </div>
+        {% endif %}
+
+
+
+
+
+        <!-- Strategy Evaluation -->
+        {% if strategy_eval %}
+        <div class="chart-section strategy-section">
+            <h2 class="section-title">🔬 Đánh giá Chiến lược</h2>
+
+            <div class="strategy-metrics-grid">
+                <div class="strategy-metric-card">
+                    <div class="strategy-metric-icon">📈</div>
+                    <div class="strategy-metric-label">Tổng lợi nhuận</div>
+                    <div
+                        class="strategy-metric-value {% if strategy_eval.perf.total_return and strategy_eval.perf.total_return > 0 %}positive{% elif strategy_eval.perf.total_return and strategy_eval.perf.total_return < 0 %}negative{% endif %}">
+                        {{ "{:,.0f}%".format(strategy_eval.perf.total_return * 100) if strategy_eval.perf.total_return
+                        else 'N/A' }}</div>
+                </div>
+                <div class="strategy-metric-card">
+                    <div class="strategy-metric-icon">📊</div>
+                    <div class="strategy-metric-label">CAGR</div>
+                    <div
+                        class="strategy-metric-value {% if strategy_eval.perf.cagr and strategy_eval.perf.cagr > 0 %}positive{% elif strategy_eval.perf.cagr and strategy_eval.perf.cagr < 0 %}negative{% endif %}">
+                        {{ "{:,.2f}%".format(strategy_eval.perf.cagr * 100) if strategy_eval.perf.cagr else 'N/A' }}
+                    </div>
+                </div>
+                <div class="strategy-metric-card">
+                    <div class="strategy-metric-icon">🔄</div>
+                    <div class="strategy-metric-label">Số lượng giao dịch</div>
+                    <div class="strategy-metric-value">{{ strategy_eval.perf.num_trades }}</div>
+                </div>
+                <div class="strategy-metric-card">
+                    <div class="strategy-metric-icon">🎯</div>
+                    <div class="strategy-metric-label">Tỉ lệ thắng</div>
+                    <div
+                        class="strategy-metric-value {% if strategy_eval.perf.win_rate and strategy_eval.perf.win_rate > 0.5 %}positive{% elif strategy_eval.perf.win_rate and strategy_eval.perf.win_rate < 0.5 %}negative{% endif %}">
+                        {{ "{:.1f}%".format(strategy_eval.perf.win_rate * 100) if strategy_eval.perf.win_rate else 'N/A'
+                        }}</div>
+                </div>
+            </div>
+
+            {% if strategy_eval.equity_img %}
+            <div class="chart-container" style="margin-top: 20px;">
+                <img src="data:image/png;base64,{{ strategy_eval.equity_img }}" alt="Strategy Equity Curve"
+                    class="chart-image">
+            </div>
+            {% endif %}
+
+            {% if strategy_eval.trades %}
+            <div class="strategy-trades-section">
+                <h4 class="strategy-trades-title">📋 Giao dịch gần đây</h4>
+                <div class="strategy-trades-scroll">
+                    <table class="table table-striped table-sm strategy-table">
+                        <thead>
+                            <tr>
+                                <th>Mở vị</th>
+                                <th>Đóng vị</th>
+                                <th>Số lượng</th>
+                                <th>P&L</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for t in strategy_eval.trades[:50] %}
+                            <tr>
+                                <td>{{ t.entry_date }}</td>
+                                <td>{{ t.exit_date }}</td>
+                                <td>{{ t.qty }}</td>
+                                <td class="{% if t.pnl > 0 %}positive{% elif t.pnl < 0 %}negative{% endif %}">{{
+                                    "{:,.0f}".format(t.pnl) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- AI Prediction Section -->
+        {% if prediction_result %}
+        <div class="chart-section" style="margin-top: 30px;">
+            <h2 class="section-title">🤖 AI Dự Đoán Tài Chính - {{ prediction_result.ticker }}</h2>
+            <p style="color: #666; margin-bottom: 20px; font-size: 0.95em;">Sử dụng Machine Learning (Random Forest) để
+                dự đoán doanh thu, lợi nhuận và ROE quý tiếp theo</p>
+
+            <!-- Revenue Prediction -->
+            <div
+                style="background: white; padding: 20px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                <h4 style="color: #667eea; margin-bottom: 15px; font-size: 1.1em;">💰 Doanh Thu</h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                    <div style="border: 1px solid #e0e0e0; padding: 15px; border-radius: 8px; text-align: center;">
+                        <div style="color: #666; font-size: 0.85em; margin-bottom: 6px;">Quý Hiện Tại</div>
+                        <div style="font-size: 1.2em; font-weight: bold; color: #333;">{{
+                            prediction_result.revenue_current|round(2) }} Tỷ</div>
+                        <div style="color: #999; font-size: 0.8em; margin-top: 4px;">{{
+                            prediction_result.current_quarter }}</div>
+                    </div>
+                    <div style="border: 1px solid #e0e0e0; padding: 15px; border-radius: 8px; text-align: center;">
+                        <div style="color: #666; font-size: 0.85em; margin-bottom: 6px;">Dự Đoán</div>
+                        <div style="font-size: 1.2em; font-weight: bold; color: #333;">{{
+                            prediction_result.revenue_pred|round(2) }} Tỷ</div>
+                        <div style="color: #999; font-size: 0.8em; margin-top: 4px;">{{ prediction_result.next_quarter
+                            }}</div>
+                    </div>
+                    <div
+                        style="border: 2px solid {% if prediction_result.revenue_change > 0 %}#28a745{% elif prediction_result.revenue_change < 0 %}#dc3545{% else %}#ffc107{% endif %}; background-color: {% if prediction_result.revenue_change > 0 %}#d4edda{% elif prediction_result.revenue_change < 0 %}#f8d7da{% else %}#fff3cd{% endif %}; padding: 15px; border-radius: 8px; text-align: center;">
+                        <div style="color: #666; font-size: 0.85em; margin-bottom: 6px;">Thay Đổi</div>
+                        <div
+                            style="font-size: 1.2em; font-weight: bold; color: {% if prediction_result.revenue_change > 0 %}#28a745{% elif prediction_result.revenue_change < 0 %}#dc3545{% else %}#ffc107{% endif %};">
+                            {{ prediction_result.revenue_change|round(2) }}%
+                        </div>
+                        <div style="font-size: 0.85em; margin-top: 4px;">
+                            {% if prediction_result.revenue_change > 0 %}✅ Tăng{% elif prediction_result.revenue_change
+                            < 0 %}⚠️ Giảm{% else %}➡️ Ổn Định{% endif %} </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Profit Prediction -->
+                <div
+                    style="background: white; padding: 20px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                    <h4 style="color: #667eea; margin-bottom: 15px; font-size: 1.1em;">📈 Lợi Nhuận Ròng</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                        <div style="border: 1px solid #e0e0e0; padding: 15px; border-radius: 8px; text-align: center;">
+                            <div style="color: #666; font-size: 0.85em; margin-bottom: 6px;">Quý Hiện Tại</div>
+                            <div style="font-size: 1.2em; font-weight: bold; color: #333;">{{
+                                prediction_result.profit_current|round(2) }} Tỷ</div>
+                            <div style="color: #999; font-size: 0.8em; margin-top: 4px;">{{
+                                prediction_result.current_quarter }}</div>
+                        </div>
+                        <div style="border: 1px solid #e0e0e0; padding: 15px; border-radius: 8px; text-align: center;">
+                            <div style="color: #666; font-size: 0.85em; margin-bottom: 6px;">Dự Đoán</div>
+                            <div style="font-size: 1.2em; font-weight: bold; color: #333;">{{
+                                prediction_result.profit_pred|round(2) }} Tỷ</div>
+                            <div style="color: #999; font-size: 0.8em; margin-top: 4px;">{{
+                                prediction_result.next_quarter }}</div>
+                        </div>
+                        <div
+                            style="border: 2px solid {% if prediction_result.profit_change > 0 %}#28a745{% elif prediction_result.profit_change < 0 %}#dc3545{% else %}#ffc107{% endif %}; background-color: {% if prediction_result.profit_change > 0 %}#d4edda{% elif prediction_result.profit_change < 0 %}#f8d7da{% else %}#fff3cd{% endif %}; padding: 15px; border-radius: 8px; text-align: center;">
+                            <div style="color: #666; font-size: 0.85em; margin-bottom: 6px;">Thay Đổi</div>
+                            <div
+                                style="font-size: 1.2em; font-weight: bold; color: {% if prediction_result.profit_change > 0 %}#28a745{% elif prediction_result.profit_change < 0 %}#dc3545{% else %}#ffc107{% endif %};">
+                                {{ prediction_result.profit_change|round(2) }}%
+                            </div>
+                            <div style="font-size: 0.85em; margin-top: 4px;">
+                                {% if prediction_result.profit_change > 0 %}✅ Tăng{% elif
+                                prediction_result.profit_change < 0 %}⚠️ Giảm{% else %}➡️ Ổn Định{% endif %} </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ROE Prediction (if available) -->
+                    {% if prediction_result.has_roe %}
+                    <div
+                        style="background: white; padding: 20px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                        <h4 style="color: #667eea; margin-bottom: 15px; font-size: 1.1em;">📊 Chỉ Số ROE</h4>
+                        <div
+                            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                            <div
+                                style="border: 1px solid #e0e0e0; padding: 15px; border-radius: 8px; text-align: center;">
+                                <div style="color: #666; font-size: 0.85em; margin-bottom: 6px;">Quý Hiện Tại</div>
+                                <div style="font-size: 1.2em; font-weight: bold; color: #333;">{{
+                                    prediction_result.roe_current|round(2) }}%</div>
+                                <div style="color: #999; font-size: 0.8em; margin-top: 4px;">{{
+                                    prediction_result.current_quarter }}</div>
+                            </div>
+                            <div
+                                style="border: 1px solid #e0e0e0; padding: 15px; border-radius: 8px; text-align: center;">
+                                <div style="color: #666; font-size: 0.85em; margin-bottom: 6px;">Dự Đoán</div>
+                                <div style="font-size: 1.2em; font-weight: bold; color: #333;">{{
+                                    prediction_result.roe_pred|round(2) }}%</div>
+                                <div style="color: #999; font-size: 0.8em; margin-top: 4px;">{{
+                                    prediction_result.next_quarter }}</div>
+                            </div>
+                            <div
+                                style="border: 2px solid {% if prediction_result.roe_change > 0 %}#28a745{% elif prediction_result.roe_change < 0 %}#dc3545{% else %}#ffc107{% endif %}; background-color: {% if prediction_result.roe_change > 0 %}#d4edda{% elif prediction_result.roe_change < 0 %}#f8d7da{% else %}#fff3cd{% endif %}; padding: 15px; border-radius: 8px; text-align: center;">
+                                <div style="color: #666; font-size: 0.85em; margin-bottom: 6px;">Thay Đổi</div>
+                                <div
+                                    style="font-size: 1.2em; font-weight: bold; color: {% if prediction_result.roe_change > 0 %}#28a745{% elif prediction_result.roe_change < 0 %}#dc3545{% else %}#ffc107{% endif %};">
+                                    {{ prediction_result.roe_change|round(2) }} điểm
+                                </div>
+                                <div style="font-size: 0.85em; margin-top: 4px;">
+                                    {% if prediction_result.roe_change > 0 %}✅ Tăng{% elif prediction_result.roe_change
+                                    < 0 %}⚠️ Giảm{% else %}➡️ Ổn Định{% endif %} </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Prediction Chart -->
+                        {% if prediction_result.prediction_chart %}
+                        <div class="chart-container" style="margin-bottom: 15px;">
+                            <h4 style="color: #667eea; margin-bottom: 15px; font-size: 1.1em; text-align: center;">📊
+                                Biểu đồ Dự đoán Quý tiếp theo</h4>
+                            <img src="data:image/png;base64,{{ prediction_result.prediction_chart }}"
+                                alt="Biểu đồ dự đoán" class="chart-image">
+                        </div>
+                        {% endif %}
+
+                        <!-- Investment Recommendation -->
+                        <div
+                            style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                            <h4 style="color: #667eea; margin-bottom: 15px; font-size: 1.1em;">💡 Khuyến Nghị Đầu Tư
+                            </h4>
+                            {% if prediction_result.recommendation_score >= 3 %}
+                            <div
+                                style="padding: 15px; border-radius: 8px; background-color: #d4edda; border-left: 4px solid #28a745; color: #155724;">
+                                <div style="font-weight: bold; font-size: 1.15em;">🟢 NÊN CÂN NHẮC ĐẦU TƯ</div>
+                                <div style="margin-top: 8px;">Doanh nghiệp có triển vọng tích cực trong quý tiếp theo.
+                                    Nhưng hãy theo dõi thêm các yếu tố thị trường khác.</div>
+                            </div>
+                            {% elif prediction_result.recommendation_score >= 1 %}
+                            <div
+                                style="padding: 15px; border-radius: 8px; background-color: #fff3cd; border-left: 4px solid #ffc107; color: #856404;">
+                                <div style="font-weight: bold; font-size: 1.15em;">🟡 CẦN QUAN SÁT THÊM</div>
+                                <div style="margin-top: 8px;">Doanh nghiệp có một số điểm tích cực nhưng còn nhiều không
+                                    chắc chắn. Nên theo dõi xu hướng thị trường và các tin tức liên quan.</div>
+                            </div>
+                            {% else %}
+                            <div
+                                style="padding: 15px; border-radius: 8px; background-color: #f8d7da; border-left: 4px solid #dc3545; color: #721c24;">
+                                <div style="font-weight: bold; font-size: 1.15em;">🔴 CẦN THẬN TRỌNG</div>
+                                <div style="margin-top: 8px;">Doanh nghiệp có dấu hiệu suy giảm hoặc rủi ro cao. Nên xem
+                                    xét lại các yếu tố cơ bản trước khi quyết định.</div>
+                            </div>
+                            {% endif %}
+
+                            <div
+                                style="margin-top: 15px; padding: 15px; background-color: #f5f5f5; border-radius: 8px;">
+                                <div style="margin-bottom: 8px;">
+                                    <strong>📍 Chỉ Số Đánh Giá: {{ prediction_result.recommendation_score }}/5</strong>
+                                </div>
+                                <div style="font-size: 0.95em; color: #666;">
+                                    {{ prediction_result.analysis_summary }}
+                                </div>
+                            </div>
+
+                            <div
+                                style="margin-top: 15px; padding: 12px; background-color: #e8f4fd; border-radius: 8px; font-size: 0.85em; color: #555;">
+                                <strong>⚠️ Lưu ý:</strong> Dự đoán AI dựa trên mô hình Machine Learning phân tích dữ
+                                liệu tài chính lịch sử. Kết quả chỉ mang tính tham khảo, không phải lời khuyên đầu tư
+                                chính thức.
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Leadership -->
+                    {% if company_info.officers %}
+                    <div class="chart-section">
+                        <h2 class="section-title">👔 Ban Lãnh đạo</h2>
+                        <div class="officers-grid">
+                            {% for officer in company_info.officers %}
+                            <div class="officer-card">
+                                <div class="officer-name">{{ officer.officer_name }}</div>
+                                <div class="officer-position">{{ officer.officer_position or 'N/A' }}</div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- News -->
+                    {% if company_info.news %}
+                    <div class="chart-section">
+                        <h2 class="section-title">📰 Tin tức mới nhất</h2>
+                        <div class="news-list">
+                            {% for item in company_info.news %}
+                            <div class="news-item">
+                                <div class="news-date">{{ item.date_str }}</div>
+                                <div class="news-title">{{ item.news_title }}</div>
+                                {% if item.news_source_link %}
+                                <a href="{{ item.news_source_link }}" target="_blank" class="news-link">Xem chi tiết
+                                    →</a>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Events -->
+                    {% if company_info.events %}
+                    <div class="chart-section">
+                        <h2 class="section-title">📅 Sự kiện Doanh nghiệp</h2>
+                        <div class="news-list">
+                            {% for event in company_info.events %}
+                            <div class="news-item">
+                                <div class="news-date">{{ event.date_str }}</div>
+                                <div class="news-title">{{ event.display_name }}</div>
+                                {% if event.event_link %}
+                                <a href="{{ event.event_link }}" target="_blank" class="news-link">Xem chi tiết →</a>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endblock %}

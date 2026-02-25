@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}Trang chủ - Phân tích Cổ phiếu{% endblock %}
+
+{% block content %}
+<div class="hero-section">
+    <div class="container">
+        <!-- Quick Links -->
+        <div class="quick-links">
+            <a href="/watchlist" class="quick-link-btn">
+                <span class="icon">⭐</span>
+                <span class="text">Danh sách Theo dõi</span>
+            </a>
+            <a href="/recommendations" class="quick-link-btn">
+                <span class="icon">💡</span>
+                <span class="text">Khuyến nghị</span>
+            </a>
+        </div>
+
+        <div class="hero-content">
+            <h1 class="hero-title">Phân tích Cổ phiếu Chuyên nghiệp</h1>
+            <p class="hero-subtitle">Nhập mã cổ phiếu để xem phân tích tài chính chi tiết</p>
+
+            <div class="search-card">
+                <form method="POST" action="{{ url_for('analyze') }}" class="search-form">
+                    <div class="input-group">
+                        <input type="text" name="symbol" placeholder="Nhập mã cổ phiếu (VD: ACB, HPG, VNM, VCB...)"
+                            class="search-input" required autofocus>
+                        <button type="submit" class="search-button">
+                            <span>Phân tích</span>
+                            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                            </svg>
+                        </button>
+                    </div>
+                </form>
+
+
+
+                {% if error %}
+                <div class="error-message">
+                    <svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                            clip-rule="evenodd" />
+                    </svg>
+                    <span>{{ error }}</span>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Search History Section -->
+            {% if search_history and search_history|length > 0 %}
+            <div class="search-history-section" style="margin-top: 30px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="font-size: 18px; font-weight: 600; color: #1a1a1a; margin: 0;">
+                        📊 Lịch sử tra cứu gần đây
+                    </h3>
+                    <form action="{{ url_for('clear_history') }}" method="POST" style="display: inline;">
+                        <button type="submit"
+                            style="background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 14px; text-decoration: underline;">
+                            Xóa lịch sử
+                        </button>
+                    </form>
+                </div>
+                <div class="history-grid"
+                    style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;">
+                    {% for item in search_history %}
+                    <form action="{{ url_for('analyze') }}" method="POST" style="margin: 0;">
+                        <input type="hidden" name="symbol" value="{{ item.symbol }}">
+                        <button type="submit" class="history-item" style="
+                            width: 100%;
+                            padding: 12px 15px;
+                            background: #f8f9fa;
+                            border: 1px solid #e0e0e0;
+                            border-radius: 8px;
+                            cursor: pointer;
+                            text-align: left;
+                            transition: all 0.2s;
+                        ">
+                            <div style="font-weight: 600; color: #1a1a1a; font-size: 14px; margin-bottom: 4px;">
+                                {{ item.symbol }}
+                            </div>
+                            {% if item.company_name %}
+                            <div
+                                style="font-size: 12px; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                {{ item.company_name }}
+                            </div>
+                            {% endif %}
+                            <div style="font-size: 11px; color: #999; margin-top: 4px;">
+                                {{ item.last_searched.strftime('%d/%m/%Y %H:%M') if item.last_searched else '' }}
+                            </div>
+                        </button>
+                    </form>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">📈</div>
+                    <h3>Biểu đồ Giá</h3>
+                    <p>Lịch sử giá với các đường MA</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">💰</div>
+                    <h3>Phân tích Tài chính</h3>
+                    <p>Doanh thu, lợi nhuận, FCF...</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🏢</div>
+                    <h3>Thông tin Doanh nghiệp</h3>
+                    <p>Lãnh đạo, sự kiện, cổ đông...</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Phân tích Ngành</h3>
+                    <p>Chỉ số chuyên biệt theo ngành</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
